@@ -1,0 +1,20 @@
+# dnshealth_exporter
+
+A Prometheus exporter for DNS zone health monitoring, inspired by [intodns.com](https://intodns.com).
+
+Monitors DNS zones and exposes granular metrics for building Grafana dashboards that detect delegation, nameserver, SOA, MX, and other DNS health problems.
+
+## Goals
+
+- **DNS zone health as metrics** — surface the kinds of checks that intodns.com performs (parent delegation, NS consistency, SOA correctness, MX validity, etc.) as Prometheus metrics, enabling Grafana dashboards and alerting rather than one-off web reports.
+- **Follow Prometheus conventions** — model the exporter after official projects like [blackbox_exporter](https://github.com/prometheus/blackbox_exporter), [node_exporter](https://github.com/prometheus/node_exporter), and [snmp_exporter](https://github.com/prometheus/snmp_exporter), using [exporter-toolkit](https://github.com/prometheus/exporter-toolkit) and the standard Prometheus library ecosystem.
+- **Detection, not policy** — the exporter exposes raw signals; thresholds, alerting rules, and SLA definitions belong in Grafana/Alertmanager.
+- **Explore Spec Kit** — this project is also an opportunity to practice and explore [Spec Kit](https://github.com/github/spec-kit), a spec-driven development toolkit for AI-assisted workflows. The `.specify/` directory contains the project's specifications, plans, and constitution generated through the Spec Kit process.
+
+## Status
+
+Early development.
+
+## License
+
+[Apache License 2.0](LICENSE)

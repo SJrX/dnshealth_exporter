@@ -33,7 +33,7 @@ func probeSOAForNS(ctx context.Context, zone string, ns nameserver, client *dns.
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeSOA)
 
-	resp, _, err := client.ExchangeContext(ctx, msg, ns.ip+":53")
+	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.ip))
 	if err != nil {
 		return fmt.Errorf("querying %s: %w", ns.ip, err)
 	}

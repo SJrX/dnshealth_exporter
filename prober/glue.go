@@ -49,6 +49,10 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 	}
 
 	// Step 2: Query each authoritative NS for its own NS + A records
+	// Track registered metrics to avoid duplicate registration when
+	// multiple NSes report the same records.
+	registered := make(map[string]bool)
+
 	for _, ns := range parentNS {
 		selfNS, selfGlue, err := querySelfForNSAndA(ctx, zone, ns, client, logger)
 		if err != nil {
@@ -58,6 +62,11 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 		}
 
 		for _, sn := range selfNS {
+			key := "ns_record:" + sn.hostname + ":" + sn.ip + ":self"
+			if registered[key] {
+				continue
+			}
+			registered[key] = true
 			labels := prometheus.Labels{
 				"zone":       zone,
 				"nameserver": sn.hostname,
@@ -69,6 +78,11 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 				labels, 1)
 		}
 		for _, sg := range selfGlue {
+			key := "ns_glue:" + sg.hostname + ":" + sg.ip + ":self"
+			if registered[key] {
+				continue
+			}
+			registered[key] = true
 			labels := prometheus.Labels{
 				"zone":       zone,
 				"nameserver": sg.hostname,
@@ -91,10 +105,9 @@ func queryParentForNSAndGlue(ctx context.Context, zone string, client *dns.Clien
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeNS)
 
-	// Try the system resolver first
-	resp, _, err := client.ExchangeContext(ctx, msg, "127.240.0.1:53")
+	resp, _, err := client.ExchangeContext(ctx, msg, DefaultResolver)
 	if err != nil {
-		return nil, nil, fmt.Errorf("querying parent at 127.240.0.1: %w", err)
+		return nil, nil, fmt.Errorf("querying parent at %s: %w", DefaultResolver, err)
 	}
 
 	// Extract NS records from answer
@@ -136,7 +149,7 @@ func querySelfForNSAndA(ctx context.Context, zone string, ns nameserver, client 
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeNS)
 
-	resp, _, err := client.ExchangeContext(ctx, msg, ns.ip+":53")
+	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.ip))
 	if err != nil {
 		return nil, nil, fmt.Errorf("querying NS at %s: %w", ns.ip, err)
 	}
@@ -150,7 +163,7 @@ func querySelfForNSAndA(ctx context.Context, zone string, ns nameserver, client 
 		// Resolve the NS hostname via the same authoritative server
 		aMsg := new(dns.Msg)
 		aMsg.SetQuestion(nsRR.Ns, dns.TypeA)
-		aResp, _, err := client.ExchangeContext(ctx, aMsg, ns.ip+":53")
+		aResp, _, err := client.ExchangeContext(ctx, aMsg, ResolveAddress(ns.ip))
 		if err != nil {
 			logger.Debug("could not resolve NS via authoritative", "ns", nsRR.Ns, "server", ns.ip, "err", err)
 			continue

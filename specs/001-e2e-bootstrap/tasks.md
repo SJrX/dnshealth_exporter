@@ -57,18 +57,18 @@
 
 ### Tests for User Story 1
 
-- [ ] T013 [US1] Integration test for SOA prober in `prober/soa_test.go` — fixture writes zone with known SOA serial to ns1 and ns2, calls SOA prober, asserts `dnshealth_soa_serial` gauge matches for each nameserver with correct zone/nameserver/ip labels
-- [ ] T014 [US1] Integration test for SOA serial drift in `prober/soa_test.go` — fixture writes different serials to ns1 vs ns2, calls SOA prober, asserts different serial values per nameserver
-- [ ] T015 [US1] Integration test for recursion-available prober in `prober/recursion_test.go` — fixture sets up authoritative-only CoreDNS, calls recursion prober, asserts `dnshealth_ns_recursion_available` is 0 for each NS
-- [ ] T016 [US1] Integration test for glue consistency (happy path) in `prober/glue_test.go` — fixture writes matching NS+glue to root and ns1/ns2, calls glue prober, asserts `dnshealth_ns_record` and `dnshealth_ns_glue` metrics present with both `source="parent"` and `source="self"` for each NS
-- [ ] T017 [US1] Integration test for glue mismatch in `prober/glue_test.go` — fixture writes mismatched NS records to ns3 vs root, calls glue prober, asserts `dnshealth_ns_record` shows discrepancy (record with `source="self"` that has no corresponding `source="parent"` or vice versa)
+- [x] T013 [US1] Integration test for SOA prober in `prober/soa_test.go` — fixture writes zone with known SOA serial to ns1 and ns2, calls SOA prober, asserts `dnshealth_soa_serial` gauge matches for each nameserver with correct zone/nameserver/ip labels
+- [x] T014 [US1] Integration test for SOA serial drift in `prober/soa_test.go` — fixture writes different serials to ns1 vs ns2, calls SOA prober, asserts different serial values per nameserver
+- [x] T015 [US1] Integration test for recursion-available prober in `prober/recursion_test.go` — fixture sets up authoritative-only CoreDNS, calls recursion prober, asserts `dnshealth_ns_recursion_available` is 0 for each NS
+- [x] T016 [US1] Integration test for glue consistency (happy path) in `prober/glue_test.go` — fixture writes matching NS+glue to root and ns1/ns2, calls glue prober, asserts `dnshealth_ns_record` and `dnshealth_ns_glue` metrics present with both `source="parent"` and `source="self"` for each NS
+- [x] T017 [US1] Integration test for glue mismatch in `prober/glue_test.go` — fixture writes mismatched NS records to ns3 vs root, calls glue prober, asserts `dnshealth_ns_record` shows discrepancy (record with `source="self"` that has no corresponding `source="parent"` or vice versa)
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Implement SOA prober in `prober/soa.go` — query SOA record from each nameserver for a zone, register `dnshealth_soa_serial`, `dnshealth_soa_refresh_seconds`, `dnshealth_soa_retry_seconds`, `dnshealth_soa_expire_seconds`, `dnshealth_soa_minimum_seconds` gauges with zone/nameserver/ip labels
-- [ ] T019 [US1] Implement recursion-available prober in `prober/recursion.go` — query each nameserver with RD flag set, check RA bit in response, register `dnshealth_ns_recursion_available` gauge with zone/nameserver/ip labels
-- [ ] T020 [US1] Implement glue consistency prober in `prober/glue.go` — query parent for NS records + glue (A records), query each authoritative NS for its own NS + A records, register `dnshealth_ns_record` and `dnshealth_ns_glue` info metrics with zone/nameserver/ip/source labels
-- [ ] T021 [US1] Implement `main.go` — parse flags with kingpin (`--config.file`, `--web.listen-address`, `--web.config.file`, `--log.level`, `--log.format`, `--version`), load config, set up promslog logger, create Prometheus registry, register `dnshealth_build_info` gauge, run all probers for each configured zone, serve `/metrics` via exporter-toolkit web server with landing page
+- [x] T018 [US1] Implement SOA prober in `prober/soa.go` — query SOA record from each nameserver for a zone, register `dnshealth_soa_serial`, `dnshealth_soa_refresh_seconds`, `dnshealth_soa_retry_seconds`, `dnshealth_soa_expire_seconds`, `dnshealth_soa_minimum_seconds` gauges with zone/nameserver/ip labels
+- [x] T019 [US1] Implement recursion-available prober in `prober/recursion.go` — query each nameserver with RD flag set, check RA bit in response, register `dnshealth_ns_recursion_available` gauge with zone/nameserver/ip labels
+- [x] T020 [US1] Implement glue consistency prober in `prober/glue.go` — query parent for NS records + glue (A records), query each authoritative NS for its own NS + A records, register `dnshealth_ns_record` and `dnshealth_ns_glue` info metrics with zone/nameserver/ip/source labels
+- [x] T021 [US1] Implement `main.go` — parse flags with kingpin (`--config.file`, `--web.listen-address`, `--web.config.file`, `--log.level`, `--log.format`, `--version`), load config, set up promslog logger, create Prometheus registry, register `dnshealth_build_info` gauge, run all probers for each configured zone, serve `/metrics` via exporter-toolkit web server with landing page
 - [ ] T022 [US1] Verify all metrics pass `promtool check metrics` validation — run exporter against Docker fixtures, curl `/metrics`, pipe through `promtool check metrics`
 
 **Checkpoint**: Exporter builds, starts, runs SOA + recursion + glue checks against Docker fixtures, and exposes valid Prometheus metrics. All US1 integration tests pass.

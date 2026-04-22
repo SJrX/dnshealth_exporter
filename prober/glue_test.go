@@ -99,9 +99,9 @@ func TestGlueProber_MismatchedNSRecords(t *testing.T) {
 		WithLabels("zone", "example.test", "nameserver", "ns3.example.test.", "source", "parent"))
 }
 
-func TestGlueProber_GlueIPMismatch(t *testing.T) {
+func TestGlueProber_DifferentIPsReportedByParentAndSelf(t *testing.T) {
 	// Fixture Setup — parent says ns1 is at 127.240.0.2, but ns1's
-	// own A record says it's at 127.240.0.9 (different IP)
+	// own A record says 127.240.0.9. Both are reported; Grafana detects the diff.
 	env := NewDNSFixture(t).
 		ReferralServer("127.240.0.1:"+TestPort,
 			SOA("example.test"),

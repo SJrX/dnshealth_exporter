@@ -28,6 +28,12 @@ type DNSFixture struct {
 type ServerOptions struct {
 	// RecursionAvailable makes the server set the RA flag in responses.
 	RecursionAvailable bool
+	// Rcode overrides the response code (e.g., dns.RcodeNameError for NXDOMAIN).
+	Rcode int
+	// Drop silently drops all queries (simulates timeout/unreachable).
+	Drop bool
+	// Garbage sends random bytes instead of a valid DNS response.
+	Garbage bool
 }
 
 type testServer struct {
@@ -103,7 +109,7 @@ func (f *DNSFixture) Stop() {
 func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry {
 	f.t.Helper()
 	registry := prometheus.NewRegistry()
-	client := &mdns.Client{Timeout: 5 * time.Second}
+	client := &mdns.Client{Timeout: 1 * time.Second}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := context.Background()
 
@@ -118,8 +124,26 @@ func startTestServer(t testing.TB, srv *testServer) {
 
 	mux := mdns.NewServeMux()
 	mux.HandleFunc(".", func(w mdns.ResponseWriter, r *mdns.Msg) {
+		// Drop: silently ignore the query (client will timeout)
+		if srv.options.Drop {
+			return
+		}
+
+		// Garbage: send random bytes
+		if srv.options.Garbage {
+			w.Write([]byte{0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03})
+			return
+		}
+
 		m := new(mdns.Msg)
 		m.SetReply(r)
+
+		// Override rcode if set
+		if srv.options.Rcode != 0 {
+			m.Rcode = srv.options.Rcode
+			w.WriteMsg(m)
+			return
+		}
 
 		if len(r.Question) == 0 {
 			w.WriteMsg(m)
@@ -206,7 +230,12 @@ func startTestServer(t testing.TB, srv *testServer) {
 		}
 	}()
 
-	// Wait for server to be ready
+	// Wait for server to be ready (skip for Drop/Garbage servers —
+	// they won't respond to readiness checks)
+	if srv.options.Drop || srv.options.Garbage {
+		time.Sleep(50 * time.Millisecond)
+		return
+	}
 	client := &mdns.Client{Timeout: 2 * time.Second}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {

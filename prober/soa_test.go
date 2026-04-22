@@ -199,3 +199,79 @@ func TestSOAProber_NoGlueFromParent(t *testing.T) {
 		WithLabels("zone", "example.test", "ip", "127.240.0.6"),
 		WithValue(777))
 }
+
+func TestSOAProber_NameserverTimesOut(t *testing.T) {
+	// Fixture Setup — ns2 drops all queries (simulates unreachable)
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			NS("example.test", "ns2.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			A("ns2.example.test", "127.240.0.3"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test", Serial(42)),
+			NS("example.test", "ns1.example.test"),
+			NS("example.test", "ns2.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			A("ns2.example.test", "127.240.0.3"),
+		).
+		ServerWithOptions("127.240.0.3:"+TestPort, ServerOptions{Drop: true},
+			SOA("example.test", Serial(42)),
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT — should not hang or crash, ns1 still works
+	metrics := env.Probe(prober.ProbeSOA, "example.test")
+
+	// Verification — ns1 has metrics, ns2 does not (timed out)
+	AssertGauge(t, metrics, "dnshealth_soa_serial",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(42))
+	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
+		WithLabels("zone", "example.test", "ip", "127.240.0.3"))
+}
+
+func TestSOAProber_NameserverReturnsNXDOMAIN(t *testing.T) {
+	// Fixture Setup — ns1 returns NXDOMAIN for the zone
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		ServerWithOptions("127.240.0.2:"+TestPort, ServerOptions{Rcode: 3}, // NXDOMAIN
+			SOA("example.test"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT — should not crash
+	metrics := env.Probe(prober.ProbeSOA, "example.test")
+
+	// Verification — no SOA metrics (NXDOMAIN means no records)
+	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"))
+}
+
+func TestSOAProber_NameserverReturnsGarbage(t *testing.T) {
+	// Fixture Setup — ns1 sends garbage bytes
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		ServerWithOptions("127.240.0.2:"+TestPort, ServerOptions{Garbage: true}).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT — should not crash
+	metrics := env.Probe(prober.ProbeSOA, "example.test")
+
+	// Verification — no SOA metrics
+	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"))
+}

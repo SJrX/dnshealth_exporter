@@ -41,17 +41,17 @@ An operator starts the exporter binary with standard flags (`--config.file`, `--
 
 ### User Story 3 - Developer Runs Integration Tests (Priority: P3)
 
-A developer clones the repository, starts the Docker-based DNS fixtures, runs the integration test suite, and gets clear pass/fail results that validate the exporter's prober functions produce correct metrics against real CoreDNS servers.
+A developer clones the repository, runs the integration test suite, and gets clear pass/fail results that validate the exporter's prober functions produce correct metrics against in-process DNS test servers.
 
 **Why this priority**: The integration test framework is a key deliverable of this feature, but it supports the other stories rather than delivering direct user value.
 
-**Independent Test**: Start Docker Compose fixtures, run `go test -tags=integration ./...` from the repo root, and verify tests call prober functions against the local CoreDNS containers and assert on metrics registered in a Prometheus registry.
+**Independent Test**: Run `go test -tags=integration ./...` from the repo root and verify tests call prober functions against in-process DNS fixtures and assert on metrics registered in a Prometheus registry.
 
 **Acceptance Scenarios**:
 
-1. **Given** the developer has Go installed, **When** they run `go test ./...`, **Then** unit tests pass without network access or Docker.
-2. **Given** the developer has Go and Docker, **When** they start the Docker Compose fixtures and run `go test -tags=integration ./...`, **Then** integration tests call prober functions that query the local CoreDNS instances and validate metric output.
-3. **Given** a CoreDNS fixture is configured to return an error for a zone (e.g., NXDOMAIN, SERVFAIL), **When** integration tests run, **Then** the test validates the prober handles the failure gracefully and still registers appropriate metrics.
+1. **Given** the developer has Go installed, **When** they run `go test ./...`, **Then** unit tests pass without network access.
+2. **Given** the developer has Go, **When** they run `go test -tags=integration ./...`, **Then** integration tests start in-process DNS servers, execute prober functions, and validate metric output. No Docker required.
+3. **Given** a test DNS fixture is configured to return an error for a zone (e.g., NXDOMAIN, timeout, garbage response), **When** integration tests run, **Then** the test validates the prober handles the failure gracefully and registers appropriate query_success=0 metrics.
 
 ### Edge Cases
 
@@ -59,7 +59,7 @@ A developer clones the repository, starts the Docker-based DNS fixtures, runs th
 - How does the exporter behave when all configured nameservers are unreachable (timeout)?
 - What happens when the config file is empty or contains no zones?
 - How does the exporter handle a zone with only one nameserver?
-- What happens if Docker/CoreDNS fixtures are not running when integration tests start?
+- What happens when a nameserver returns garbage bytes instead of a valid DNS response?
 
 ## Requirements *(mandatory)*
 
@@ -74,10 +74,10 @@ A developer clones the repository, starts the Docker-based DNS fixtures, runs th
 - **FR-007**: System MUST shut down gracefully on SIGTERM and SIGINT.
 - **FR-008**: System MUST fail fast with a clear error on invalid configuration.
 - **FR-009**: System MUST produce structured log output via promslog.
-- **FR-010**: System MUST include at least one DNS check type that exercises the full prober pipeline (the specific check type will be determined during task planning).
-- **FR-011**: Integration tests MUST run against a Docker-based DNS test environment using CoreDNS containers — not public DNS infrastructure.
-- **FR-012**: The test DNS environment MUST simulate a zone hierarchy: one container acting as parent/root and up to eight containers acting as authoritative nameservers, each bound to a distinct loopback IP in the `127.240.0.0/24` range (e.g., `127.240.0.1` through `127.240.0.9`) on port 53 to avoid conflicts with services on standard loopback.
-- **FR-013**: The test DNS environment MUST be defined as a Docker Compose configuration committed to the repository.
+- **FR-010**: System MUST include at least one DNS check type that exercises the full prober pipeline. Implemented: SOA, recursion-available, and glue consistency.
+- **FR-011**: Integration tests MUST run against in-process DNS test servers using `miekg/dns` — not public DNS infrastructure and not Docker.
+- **FR-012**: The test DNS environment MUST simulate a zone hierarchy with referral servers (parent/TLD) and authoritative servers, using distinct loopback IPs in the `127.240.0.0/24` range on port 10053.
+- **FR-013**: Each prober MUST register a per-nameserver `query_success` metric (0/1) so that failures are visible in Grafana at the nameserver level.
 
 ### Key Entities
 
@@ -107,11 +107,12 @@ This is a known design tension. The exporter will need to make pragmatic comprom
 
 ## Assumptions
 
-- Integration tests run against local Docker-based CoreDNS fixtures, not public DNS. The developer needs Go and Docker installed.
-- CoreDNS containers bind to distinct loopback IPs in `127.240.0.0/24` on port 53. Linux natively routes the entire `127.0.0.0/8` range to loopback; macOS/Windows may need additional configuration (out of scope, Linux is primary target).
-- Testing strategy strongly favors integration tests against CoreDNS over unit tests with mocks. Wire-format edge cases and malformed DNS responses are out of scope for this feature.
+- Integration tests use in-process `miekg/dns` servers. No Docker, no external dependencies beyond Go.
+- Test servers bind to loopback IPs in `127.240.0.0/24` on port 10053. Linux natively routes the entire `127.0.0.0/8` range to loopback.
+- Testing strategy strongly favors integration tests with in-process DNS servers over unit tests with mocks. Tests cover happy paths, failure modes (NXDOMAIN, timeout, garbage), and edge cases (no glue, partial glue, mismatched records).
 - Integration tests call prober functions in-process (not the compiled binary) with a Prometheus registry, similar to how blackbox_exporter tests its probers.
-- The specific DNS check types (SOA, NS consistency, MX, etc.) will be determined during task planning — this spec intentionally leaves that flexible to focus on the E2E flow.
-- A single YAML configuration file is sufficient; advanced configuration patterns (reload, per-zone overrides) are out of scope for this version.
-- CI/CD pipeline setup is out of scope; the integration test framework needs to work locally with `go test` + Docker Compose.
+- Three check types implemented: SOA, recursion-available, and glue consistency.
+- The exporter walks the DNS delegation chain from root servers to discover nameservers and the parent's delegation view. Root server addresses are configurable (overridden in tests).
+- A single YAML configuration file with a zone list and optional address overrides is sufficient for this version.
+- CI/CD pipeline setup is out of scope; the integration test framework works locally with `go test`.
 - Grafana dashboard creation is out of scope; this version focuses on producing metrics that a dashboard could consume.

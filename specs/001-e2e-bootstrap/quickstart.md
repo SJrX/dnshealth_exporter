@@ -2,8 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.26+ installed
-- Docker and Docker Compose (for integration tests)
+- Go 1.26+
 
 ## Build
 
@@ -19,8 +18,8 @@ Create `dnshealth.yml`:
 
 ```yaml
 zones:
-  - name: example.com
-  - name: example.org
+  - example.com
+  - example.org
 ```
 
 ## Run
@@ -38,22 +37,21 @@ curl -s http://localhost:9199/metrics | grep dnshealth_
 ```
 
 You should see `dnshealth_build_info`, `dnshealth_check_success`,
-`dnshealth_soa_*` and other metrics.
+`dnshealth_soa_*`, `dnshealth_ns_recursion_available`,
+`dnshealth_ns_record`, and `dnshealth_ns_glue` metrics.
 
 ## Run Tests
 
-Unit tests (no Docker needed):
+Unit tests:
 
 ```bash
 go test ./...
 ```
 
-Integration tests (requires Docker):
+Integration tests (no Docker needed — uses in-process DNS servers):
 
 ```bash
-docker compose -f testdata/docker-compose.yml up -d
 go test -tags=integration ./...
-docker compose -f testdata/docker-compose.yml down
 ```
 
 ## Shut Down

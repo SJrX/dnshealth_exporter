@@ -63,23 +63,18 @@
 
 ### Integration Test Infrastructure
 
-- **Decision**: Docker Compose + CoreDNS (`coredns/coredns` image)
-- **Rationale**: CoreDNS is lightweight, highly configurable via
-  Corefile, supports plugins for error injection (errc, template).
-  Docker Compose allows defining a multi-container DNS hierarchy.
-  Containers bind to `127.240.0.x:53` to avoid port conflicts.
-- **Alternatives**: BIND (heavyweight, harder to configure for test
-  scenarios); in-process miekg/dns test server (good for unit tests,
-  but doesn't validate real DNS server behavior)
-
-### CoreDNS Error Simulation
-
-- **Decision**: Use CoreDNS `errc` plugin for SERVFAIL/REFUSED, and
-  simply omit zones for NXDOMAIN. Timeout simulation via pointing
-  exporter at an IP with nothing listening.
-- **Rationale**: Keeps test fixtures simple and declarative. No custom
-  code needed in CoreDNS config.
-- **Alternatives**: Custom CoreDNS plugins (overkill for test fixtures)
+- **Decision**: In-process DNS servers using `miekg/dns`
+- **Rationale**: Eliminates Docker dependency entirely. Each test
+  starts its own servers on `127.240.0.x:10053`, runs in sub-second
+  time, fully isolated. The `miekg/dns` server supports custom
+  handlers for error simulation (NXDOMAIN via Rcode, timeout via
+  Drop, garbage via raw bytes). Originally planned Docker Compose +
+  CoreDNS, but CoreDNS reload semantics (serial ordering, timing)
+  and Docker overhead made in-process servers clearly superior.
+- **Alternatives considered**: Docker Compose + CoreDNS (tried first,
+  abandoned due to reload complexity and 15s+ test times);
+  embedding CoreDNS as a Go library (viable but unnecessary when
+  `miekg/dns` server gives full control)
 
 ## Testing Approach
 
@@ -105,91 +100,73 @@ file format via `.String()`.
 func TestSOAProber_DetectsSerialDrift(t *testing.T) {
     // Fixture Setup — ns1 and ns2 have different serials
     env := NewDNSFixture(t).
-        WriteZone("ns1", ZoneFile("example.test",
-            SOA(Serial(2026042101)),
-            NS("ns1.example.test"),
-            NS("ns2.example.test"),
-        )).
-        WriteZone("ns2", ZoneFile("example.test",
-            SOA(Serial(1)),
-            NS("ns1.example.test"),
-            NS("ns2.example.test"),
-        )).
-        Reload(t)
+        ReferralServer("127.240.0.1:"+TestPort,
+            SOA("example.test"),
+            NS("example.test", "ns1.example.test"),
+            NS("example.test", "ns2.example.test"),
+            A("ns1.example.test", "127.240.0.2"),
+            A("ns2.example.test", "127.240.0.3"),
+        ).
+        Server("127.240.0.2:"+TestPort,
+            SOA("example.test", Serial(200)),
+            ...
+        ).
+        Server("127.240.0.3:"+TestPort,
+            SOA("example.test", Serial(1)),
+            ...
+        ).
+        Start(t)
+    defer env.Stop()
 
     // Exercise SUT
-    metrics := env.Probe(prober.SOA, "example.test")
+    metrics := env.Probe(prober.ProbeSOA, "example.test")
 
     // Verification
     AssertGauge(t, metrics, "dnshealth_soa_serial",
         WithLabels("zone", "example.test", "ip", "127.240.0.2"),
-        WithValue(2026042101))
+        WithValue(200))
     AssertGauge(t, metrics, "dnshealth_soa_serial",
         WithLabels("zone", "example.test", "ip", "127.240.0.3"),
         WithValue(1))
 }
 ```
 
-The serial values that matter to the test are visible in both the
-fixture setup and the verification. No hidden state in external
-files.
+Each test declares its full DNS hierarchy inline — root referral
+server, authoritative servers, all records. No external files,
+no shared state between tests.
 
 ### Record Helpers
 
-Thin wrappers over `miekg/dns` types. Defaults-with-override
-pattern — only specify what matters:
+Thin wrappers over `miekg/dns` types. Defaults-with-override:
 
-- `SOA(opts ...SOAOption)` — returns `*dns.SOA` with defaults
-  for Mbox, Refresh, Retry, Expire, Minttl. Options like
-  `Serial(n)`, `Refresh(n)` override specific fields.
-- `NS(name string)` — returns `*dns.NS` with auto-filled header.
-- `A(name, ip string)` — returns `*dns.A`.
-- `MX(name string, pref uint16)` — returns `*dns.MX`.
-- `ZoneFile(zone string, records ...dns.RR) string` — serializes
-  records to zone file text via `rr.String()`.
-
-These are ~50-100 lines of helper code total. They produce real
-`dns.RR` objects, not fakes.
+- `SOA(zone, opts...)` — returns `*dns.SOA` with auto-incrementing
+  serial and sensible defaults. `Serial(n)`, `Refresh(n)`, etc.
+  override specific fields.
+- `NS(zone, nameserver)` — returns `*dns.NS`.
+- `A(name, ip)` — returns `*dns.A`.
 
 ### Fixture Management
 
-`NewDNSFixture(t)` manages the Docker Compose environment:
+`NewDNSFixture(t)` manages in-process DNS servers:
 
-- Each CoreDNS container mounts a separate runtime directory
-  (e.g., `testdata/runtime/ns1/zones/`).
-- `WriteZone("ns1", content)` replaces the entire zone directory
-  for that container. Each test fully defines what each nameserver
-  serves — previous test state doesn't matter.
-- `Reload(t)` signals CoreDNS to reload zone files (CoreDNS
-  `reload` plugin). Blocks until reload is confirmed.
-- Docker Compose containers start once for the test suite (via
-  `TestMain`), not per-test.
-- Integration tests run sequentially (`-count=1 -parallel=1`).
+- `Server(addr, records...)` — authoritative server (Answer section)
+- `ReferralServer(addr, records...)` — parent/TLD server (Authority
+  section + glue in Additional). Supports parent zone referrals
+  for hostname resolution (no-glue case).
+- `ServerWithOptions(addr, opts, records...)` — configurable:
+  `RecursionAvailable`, `Rcode` (NXDOMAIN), `Drop` (timeout),
+  `Garbage` (invalid bytes).
+- `Start(t)` launches all servers, `Stop()` shuts them down.
+- `Probe(fn, zone)` calls a prober with a fresh registry.
 
 ### Assertion Helpers
 
-Domain-specific assertion functions for Prometheus metrics:
-
-- `AssertGauge(t, registry, name, opts...)` — finds a metric by
-  name and label matchers, asserts its value.
-- `AssertGaugeExists(t, registry, name, opts...)` — asserts the
-  metric exists (any value).
-- `AssertGaugeMissing(t, registry, name, opts...)` — asserts no
-  matching metric exists.
-- `WithLabels(pairs ...string)` — label matcher option.
-- `WithValue(v float64)` — value matcher option.
-
-### Why Not a Full DSL
-
-A full fluent context-navigation DSL (like the university enrollment
-DSL pattern) could be powerful here but is premature for v1:
-
-- We have ~3 check types and ~4 record helpers. The abstraction
-  surface doesn't yet justify the investment.
-- The thin functional helpers are easily refactorable into a DSL
-  later if fixture complexity grows.
-- The important thing is that tests are readable now, with the
-  Meszaros principle satisfied. The fixture helpers achieve that.
+- `AssertGauge(t, registry, name, opts...)` — value match
+- `AssertGaugeExists(t, registry, name, opts...)` — existence
+- `AssertGaugeMissing(t, registry, name, opts...)` — absence
+- `AssertGaugeInRange(t, registry, name, opts, min, max)` — range
+- `WithLabels(pairs...)`, `WithValue(v)` — matchers
+- `DumpMetrics(t, registry)` — debug helper
 
 ## Architecture: Prober Pattern
 

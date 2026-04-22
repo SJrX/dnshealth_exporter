@@ -12,10 +12,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Point nameserver discovery at our test root fixture.
-	prober.DefaultResolver = "127.240.0.1:" + testutil.TestPort
+	// Override root servers to point at our test root fixture.
+	// This is the only override — the delegation walker, nameserver
+	// discovery, and probers all follow the same code path as
+	// production.
+	prober.RootServers = []string{"127.240.0.1:" + testutil.TestPort}
 
-	// All test servers run on TestPort, so override address resolution.
+	// All test servers run on TestPort.
 	prober.ResolveAddress = func(ip string) string {
 		return net.JoinHostPort(ip, testutil.TestPort)
 	}

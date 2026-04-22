@@ -15,7 +15,6 @@ import (
 
 const (
 	// TestPort is the fixed port used by all test DNS servers.
-	// Using a high port avoids needing root privileges.
 	TestPort = "10053"
 )
 
@@ -26,10 +25,11 @@ type DNSFixture struct {
 }
 
 type testServer struct {
-	addr    string
-	records []mdns.RR
-	server  *mdns.Server
-	wg      sync.WaitGroup
+	addr     string
+	records  []mdns.RR
+	referral bool // if true, return NS records as referrals (Authority section)
+	server   *mdns.Server
+	wg       sync.WaitGroup
 }
 
 // NewDNSFixture creates a new fixture manager.
@@ -37,9 +37,7 @@ func NewDNSFixture(t testing.TB) *DNSFixture {
 	return &DNSFixture{t: t}
 }
 
-// Server adds an in-process DNS server at the given address
-// (e.g., "127.240.0.2:10053") serving the provided records.
-// Records are served for any query matching the zone.
+// Server adds an authoritative in-process DNS server.
 func (f *DNSFixture) Server(addr string, records ...mdns.RR) *DNSFixture {
 	f.t.Helper()
 	f.servers = append(f.servers, &testServer{
@@ -49,19 +47,30 @@ func (f *DNSFixture) Server(addr string, records ...mdns.RR) *DNSFixture {
 	return f
 }
 
-// Start launches all configured DNS servers. Call this after all
-// Server() calls. Returns the fixture for chaining.
+// ReferralServer adds a server that returns NS queries as referrals
+// (Authority section + glue in Additional), simulating a parent/TLD
+// server delegating to authoritative nameservers.
+func (f *DNSFixture) ReferralServer(addr string, records ...mdns.RR) *DNSFixture {
+	f.t.Helper()
+	f.servers = append(f.servers, &testServer{
+		addr:     addr,
+		records:  records,
+		referral: true,
+	})
+	return f
+}
+
+// Start launches all configured DNS servers.
 func (f *DNSFixture) Start(t testing.TB) *DNSFixture {
 	t.Helper()
 	for _, srv := range f.servers {
 		startTestServer(t, srv)
 	}
-	// Brief pause to let servers bind
 	time.Sleep(50 * time.Millisecond)
 	return f
 }
 
-// Stop shuts down all DNS servers. Typically called via defer.
+// Stop shuts down all DNS servers.
 func (f *DNSFixture) Stop() {
 	for _, srv := range f.servers {
 		if srv.server != nil {
@@ -93,7 +102,6 @@ func startTestServer(t testing.TB, srv *testServer) {
 	mux.HandleFunc(".", func(w mdns.ResponseWriter, r *mdns.Msg) {
 		m := new(mdns.Msg)
 		m.SetReply(r)
-		m.Authoritative = true
 
 		if len(r.Question) == 0 {
 			w.WriteMsg(m)
@@ -103,25 +111,49 @@ func startTestServer(t testing.TB, srv *testServer) {
 		qname := r.Question[0].Name
 		qtype := r.Question[0].Qtype
 
+		// Collect matching records
+		var matched []mdns.RR
 		for _, rr := range srv.records {
 			if rr.Header().Name != qname {
 				continue
 			}
 			if qtype == mdns.TypeANY || rr.Header().Rrtype == qtype {
-				m.Answer = append(m.Answer, rr)
+				matched = append(matched, rr)
 			}
 		}
 
-		// Add glue records in the Additional section for NS queries
-		if qtype == mdns.TypeNS {
-			for _, ans := range m.Answer {
-				nsRR, ok := ans.(*mdns.NS)
+		if srv.referral && qtype == mdns.TypeNS {
+			// Referral mode: NS records go in Authority, glue in Additional.
+			// Response is NOT authoritative (simulates parent delegation).
+			m.Authoritative = false
+			m.Ns = matched
+			for _, ns := range matched {
+				nsRR, ok := ns.(*mdns.NS)
 				if !ok {
 					continue
 				}
 				for _, rr := range srv.records {
 					if a, ok := rr.(*mdns.A); ok && a.Header().Name == nsRR.Ns {
 						m.Extra = append(m.Extra, a)
+					}
+				}
+			}
+		} else {
+			// Authoritative mode: records in Answer section.
+			m.Authoritative = true
+			m.Answer = matched
+
+			// Add glue in Additional for NS queries
+			if qtype == mdns.TypeNS {
+				for _, ans := range m.Answer {
+					nsRR, ok := ans.(*mdns.NS)
+					if !ok {
+						continue
+					}
+					for _, rr := range srv.records {
+						if a, ok := rr.(*mdns.A); ok && a.Header().Name == nsRR.Ns {
+							m.Extra = append(m.Extra, a)
+						}
 					}
 				}
 			}
@@ -146,7 +178,7 @@ func startTestServer(t testing.TB, srv *testServer) {
 		}
 	}()
 
-	// Wait for the server to be ready by doing a test query
+	// Wait for server to be ready
 	client := &mdns.Client{Timeout: 2 * time.Second}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {

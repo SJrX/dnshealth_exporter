@@ -135,10 +135,12 @@ func TestSOAProber_NameserverReturnsNoSOARecord(t *testing.T) {
 	// Exercise SUT
 	metrics := env.Probe(prober.ProbeSOA, "example.test")
 
-	// Verification — no SOA metrics registered for this NS,
-	// but the check itself should not crash
+	// Verification — no SOA field metrics, but query_success=0 reported
 	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
 		WithLabels("zone", "example.test", "ip", "127.240.0.2"))
+	AssertGauge(t, metrics, "dnshealth_soa_query_success",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(0))
 }
 
 func TestSOAProber_SingleNameserver(t *testing.T) {
@@ -226,10 +228,16 @@ func TestSOAProber_NameserverTimesOut(t *testing.T) {
 	// Exercise SUT — should not hang or crash, ns1 still works
 	metrics := env.Probe(prober.ProbeSOA, "example.test")
 
-	// Verification — ns1 has metrics, ns2 does not (timed out)
+	// Verification — ns1 succeeds, ns2 fails
 	AssertGauge(t, metrics, "dnshealth_soa_serial",
 		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
 		WithValue(42))
+	AssertGauge(t, metrics, "dnshealth_soa_query_success",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_soa_query_success",
+		WithLabels("zone", "example.test", "ip", "127.240.0.3"),
+		WithValue(0))
 	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
 		WithLabels("zone", "example.test", "ip", "127.240.0.3"))
 }
@@ -251,7 +259,10 @@ func TestSOAProber_NameserverReturnsNXDOMAIN(t *testing.T) {
 	// Exercise SUT — should not crash
 	metrics := env.Probe(prober.ProbeSOA, "example.test")
 
-	// Verification — no SOA metrics (NXDOMAIN means no records)
+	// Verification — query_success=0, no SOA field metrics
+	AssertGauge(t, metrics, "dnshealth_soa_query_success",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(0))
 	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
 		WithLabels("zone", "example.test", "ip", "127.240.0.2"))
 }
@@ -271,7 +282,10 @@ func TestSOAProber_NameserverReturnsGarbage(t *testing.T) {
 	// Exercise SUT — should not crash
 	metrics := env.Probe(prober.ProbeSOA, "example.test")
 
-	// Verification — no SOA metrics
+	// Verification — query_success=0, no SOA field metrics
+	AssertGauge(t, metrics, "dnshealth_soa_query_success",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(0))
 	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
 		WithLabels("zone", "example.test", "ip", "127.240.0.2"))
 }

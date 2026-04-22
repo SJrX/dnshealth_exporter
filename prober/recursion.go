@@ -23,8 +23,21 @@ func ProbeRecursion(ctx context.Context, zone string, client *dns.Client, regist
 	}
 
 	for _, ns := range nameservers {
+		nsLabels := prometheus.Labels{
+			"zone":       zone,
+			"nameserver": ns.hostname,
+			"ip":         ns.ip,
+		}
+
 		if err := probeRecursionForNS(ctx, zone, ns, client, registry, logger); err != nil {
 			logger.Warn("recursion check failed for nameserver", "zone", zone, "nameserver", ns.hostname, "ip", ns.ip, "err", err)
+			newGauge(registry, "dnshealth_recursion_query_success",
+				"Whether the recursion query to this nameserver succeeded (1=success, 0=failure).",
+				nsLabels, 0)
+		} else {
+			newGauge(registry, "dnshealth_recursion_query_success",
+				"Whether the recursion query to this nameserver succeeded (1=success, 0=failure).",
+				nsLabels, 1)
 		}
 	}
 	return nil

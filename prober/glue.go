@@ -74,12 +74,24 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 			continue
 		}
 
+		nsLabels := prometheus.Labels{
+			"zone":       zone,
+			"nameserver": ns.hostname,
+			"ip":         ns.ip,
+		}
+
 		selfNS, selfGlue, err := querySelfForNSAndA(ctx, zone, ns, client, logger)
 		if err != nil {
 			logger.Warn("glue: could not query NS for self records",
 				"zone", zone, "nameserver", ns.hostname, "ip", ns.ip, "err", err)
+			newGauge(registry, "dnshealth_glue_query_success",
+				"Whether the glue self-query to this nameserver succeeded (1=success, 0=failure).",
+				nsLabels, 0)
 			continue
 		}
+		newGauge(registry, "dnshealth_glue_query_success",
+			"Whether the glue self-query to this nameserver succeeded (1=success, 0=failure).",
+			nsLabels, 1)
 
 		for _, sn := range selfNS {
 			key := "ns_record:" + sn.hostname + ":" + sn.ip + ":self"

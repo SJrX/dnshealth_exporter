@@ -12,7 +12,7 @@ import (
 func TestGlueProber_ConsistentGlue(t *testing.T) {
 	// Fixture Setup — parent and both NSes agree on NS records and glue
 	env := NewDNSFixture(t).
-		Server("127.240.0.1:"+TestPort, // root/parent
+		ReferralServer("127.240.0.1:"+TestPort, // root/parent
 			SOA("example.test"),
 			NS("example.test", "ns1.example.test"),
 			NS("example.test", "ns2.example.test"),
@@ -55,7 +55,7 @@ func TestGlueProber_MismatchedNSRecords(t *testing.T) {
 	// Parent: ns1 + ns3
 	// ns3 self-reports: ns1 + ns2 (not ns3!) — mismatch
 	env := NewDNSFixture(t).
-		Server("127.240.0.1:"+TestPort, // root/parent
+		ReferralServer("127.240.0.1:"+TestPort, // root/parent
 			SOA("example.test"),
 			NS("example.test", "ns1.example.test"),
 			NS("example.test", "ns3.example.test"),

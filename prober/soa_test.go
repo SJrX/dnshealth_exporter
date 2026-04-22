@@ -12,7 +12,7 @@ import (
 func TestSOAProber_ReturnsSerialFromNameservers(t *testing.T) {
 	// Fixture Setup — root delegates to ns1 + ns2, both serve same serial
 	env := NewDNSFixture(t).
-		Server("127.240.0.1:"+TestPort,
+		ReferralServer("127.240.0.1:"+TestPort,
 			SOA("example.test", Serial(100)),
 			NS("example.test", "ns1.example.test"),
 			NS("example.test", "ns2.example.test"),
@@ -51,7 +51,7 @@ func TestSOAProber_ReturnsSerialFromNameservers(t *testing.T) {
 func TestSOAProber_DetectsSerialDrift(t *testing.T) {
 	// Fixture Setup — ns1 and ns2 have different serials
 	env := NewDNSFixture(t).
-		Server("127.240.0.1:"+TestPort,
+		ReferralServer("127.240.0.1:"+TestPort,
 			SOA("example.test"),
 			NS("example.test", "ns1.example.test"),
 			NS("example.test", "ns2.example.test"),

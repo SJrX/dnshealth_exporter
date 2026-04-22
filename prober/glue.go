@@ -13,19 +13,19 @@ func init() {
 	RegisterProber("glue", ProbeGlue)
 }
 
-// ProbeGlue queries the parent zone for NS records and glue (A records),
-// then queries each authoritative NS for its own NS and A records.
-// Both views are exposed as info metrics with a "source" label so
-// Grafana can detect discrepancies.
+// ProbeGlue walks the delegation chain to get the parent's view of
+// NS records and glue, then queries each authoritative NS for its
+// own NS and A records. Both views are exposed as info metrics with
+// a "source" label so Grafana can detect discrepancies.
 func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry prometheus.Registerer, logger *slog.Logger) error {
-	// Step 1: Get NS records and glue from parent
-	parentNS, parentGlue, err := queryParentForNSAndGlue(ctx, zone, client, logger)
+	// Step 1: Walk delegation from root to get the parent's view
+	delegation, err := WalkDelegation(ctx, zone, client, logger)
 	if err != nil {
-		return fmt.Errorf("glue: querying parent: %w", err)
+		return fmt.Errorf("glue: %w", err)
 	}
 
-	// Register parent's view
-	for _, ns := range parentNS {
+	// Register parent's NS records
+	for _, ns := range delegation.NSRecords {
 		labels := prometheus.Labels{
 			"zone":       zone,
 			"nameserver": ns.hostname,
@@ -36,7 +36,9 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 			"NS record presence by source (value always 1).",
 			labels, 1)
 	}
-	for _, g := range parentGlue {
+
+	// Register parent's glue
+	for _, g := range delegation.Glue {
 		labels := prometheus.Labels{
 			"zone":       zone,
 			"nameserver": g.hostname,
@@ -49,11 +51,15 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 	}
 
 	// Step 2: Query each authoritative NS for its own NS + A records
-	// Track registered metrics to avoid duplicate registration when
-	// multiple NSes report the same records.
 	registered := make(map[string]bool)
 
-	for _, ns := range parentNS {
+	for _, ns := range delegation.NSRecords {
+		if ns.ip == "" {
+			logger.Warn("glue: no IP for nameserver, skipping self-query",
+				"zone", zone, "nameserver", ns.hostname)
+			continue
+		}
+
 		selfNS, selfGlue, err := querySelfForNSAndA(ctx, zone, ns, client, logger)
 		if err != nil {
 			logger.Warn("glue: could not query NS for self records",
@@ -98,54 +104,9 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 	return nil
 }
 
-// queryParentForNSAndGlue queries for NS records of the zone.
-// In a real implementation this would query the parent zone's servers;
-// for now we use the system resolver to get the delegation info.
-func queryParentForNSAndGlue(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) (nsRecords []nameserver, glue []nameserver, err error) {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn(zone), dns.TypeNS)
-
-	resp, _, err := client.ExchangeContext(ctx, msg, DefaultResolver)
-	if err != nil {
-		return nil, nil, fmt.Errorf("querying parent at %s: %w", DefaultResolver, err)
-	}
-
-	// Extract NS records from answer
-	for _, rr := range resp.Answer {
-		nsRR, ok := rr.(*dns.NS)
-		if !ok {
-			continue
-		}
-		nsRecords = append(nsRecords, nameserver{hostname: nsRR.Ns, ip: ""})
-	}
-
-	// Extract glue from additional section
-	glueMap := make(map[string]string) // hostname -> ip
-	for _, rr := range resp.Extra {
-		if a, ok := rr.(*dns.A); ok {
-			glueMap[a.Hdr.Name] = a.A.String()
-		}
-	}
-
-	// Fill in IPs for NS records from glue
-	for i, ns := range nsRecords {
-		if ip, ok := glueMap[ns.hostname]; ok {
-			nsRecords[i].ip = ip
-			glue = append(glue, nameserver{hostname: ns.hostname, ip: ip})
-		}
-	}
-
-	if len(nsRecords) == 0 {
-		return nil, nil, fmt.Errorf("no NS records found for zone %s from parent", zone)
-	}
-
-	return nsRecords, glue, nil
-}
-
 // querySelfForNSAndA queries an authoritative NS for its own NS records
 // and resolves their A records.
 func querySelfForNSAndA(ctx context.Context, zone string, ns nameserver, client *dns.Client, logger *slog.Logger) (nsRecords []nameserver, aRecords []nameserver, err error) {
-	// Query for NS records
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeNS)
 

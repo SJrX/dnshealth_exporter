@@ -13,7 +13,7 @@ func TestRecursionProber_AuthoritativeRefusesRecursion(t *testing.T) {
 	// Fixture Setup — in-process miekg/dns servers are authoritative-only
 	// by default (they never set RA in responses)
 	env := NewDNSFixture(t).
-		Server("127.240.0.1:"+TestPort,
+		ReferralServer("127.240.0.1:"+TestPort,
 			SOA("example.test"),
 			NS("example.test", "ns1.example.test"),
 			NS("example.test", "ns2.example.test"),

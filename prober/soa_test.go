@@ -240,6 +240,13 @@ func TestSOAProber_NameserverTimesOut(t *testing.T) {
 		WithValue(0))
 	AssertGaugeMissing(t, metrics, "dnshealth_soa_serial",
 		WithLabels("zone", "example.test", "ip", "127.240.0.3"))
+
+	// Duration metrics exist for both — ns1 is fast, ns2 is ~1s (timeout)
+	AssertGaugeExists(t, metrics, "dnshealth_soa_query_duration_seconds",
+		WithLabels("ip", "127.240.0.2"))
+	AssertGaugeInRange(t, metrics, "dnshealth_soa_query_duration_seconds",
+		[]MetricOption{WithLabels("ip", "127.240.0.3")},
+		0.5, 2.0) // timeout is 1s, allow some slack
 }
 
 func TestSOAProber_NameserverReturnsNXDOMAIN(t *testing.T) {

@@ -91,6 +91,27 @@ func AssertGaugeMissing(t testing.TB, registry *prometheus.Registry, name string
 	}
 }
 
+// AssertGaugeInRange asserts that a gauge metric exists and its
+// value falls within [min, max].
+func AssertGaugeInRange(t testing.TB, registry *prometheus.Registry, name string, opts []MetricOption, min, max float64) {
+	t.Helper()
+	m := &metricMatcher{}
+	for _, opt := range opts {
+		opt(m)
+	}
+
+	metric := findMetric(t, registry, name, m.labels)
+	if metric == nil {
+		t.Fatalf("metric %s with labels %v not found", name, m.labels)
+	}
+
+	got := metric.GetGauge().GetValue()
+	if got < min || got > max {
+		t.Errorf("metric %s with labels %v: got value %v, want between %v and %v",
+			name, m.labels, got, min, max)
+	}
+}
+
 func findMetric(t testing.TB, registry *prometheus.Registry, name string, labels map[string]string) *dto.Metric {
 	t.Helper()
 	families, err := registry.Gather()

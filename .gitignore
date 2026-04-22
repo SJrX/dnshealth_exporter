@@ -1,0 +1,16 @@
+# Binary
+dnshealth_exporter
+*.exe
+*.test
+*.out
+
+# Test runtime artifacts
+testdata/coredns/runtime/*/zones/*.zone
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

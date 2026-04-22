@@ -23,9 +23,9 @@
 
 **Purpose**: Bootstrap Go project, dependencies, and build tooling
 
-- [ ] T001 Initialize Go module and add dependencies in `go.mod` (`miekg/dns`, `prometheus/client_golang`, `prometheus/exporter-toolkit`, `prometheus/common`, `alecthomas/kingpin/v2`, `go.yaml.in/yaml/v3`)
-- [ ] T002 Create `Makefile` with targets: `build`, `test`, `test-integration`, `vet`, `fmt`, `docker-up`, `docker-down`
-- [ ] T003 [P] Create example config file `dnshealth.yml` with two sample zones
+- [x] T001 Initialize Go module and add dependencies in `go.mod` (`miekg/dns`, `prometheus/client_golang`, `prometheus/exporter-toolkit`, `prometheus/common`, `alecthomas/kingpin/v2`, `go.yaml.in/yaml/v3`)
+- [x] T002 Create `Makefile` with targets: `build`, `test`, `test-integration`, `vet`, `fmt`, `docker-up`, `docker-down`
+- [x] T003 [P] Create example config file `dnshealth.yml` with two sample zones
 
 ---
 
@@ -35,15 +35,15 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Implement YAML config parsing and validation in `config/config.go` — load zone list from file, fail on empty/invalid config
-- [ ] T005 Implement ProbeFn type and prober registry in `prober/prober.go` — define the `ProbeFn` signature, a map of check name → function, and common metrics (`dnshealth_check_success`, `dnshealth_check_duration_seconds`)
-- [ ] T006 Create Docker Compose file `testdata/docker-compose.yml` — 4 CoreDNS containers (`dns-root` on `127.240.0.1`, `dns-ns1` on `127.240.0.2`, `dns-ns2` on `127.240.0.3`, `dns-ns3` on `127.240.0.4`) each with `reload 1s` and runtime zone mounts
-- [ ] T007 [P] Create static Corefiles in `testdata/coredns/root/Corefile`, `testdata/coredns/ns1/Corefile`, `testdata/coredns/ns2/Corefile`, `testdata/coredns/ns3/Corefile` — each points to its runtime zone directory
-- [ ] T008 [P] Create `testdata/coredns/runtime/` directory structure with `.gitkeep` files for `ns1/zones/`, `ns2/zones/`, `ns3/zones/`, `root/zones/`
-- [ ] T009 Implement DNS record helpers in `testutil/records.go` — `SOA(opts...)`, `NS(name)`, `A(name, ip)`, `ZoneFile(zone, records...)` with defaults-with-override pattern over `miekg/dns` types
-- [ ] T010 Implement test fixture manager in `testutil/fixture.go` — `NewDNSFixture(t)`, `WriteZone(container, content)` (replaces entire zone dir for container), `Reload(t)` (triggers CoreDNS reload and waits), `Probe(fn, zone)` (calls prober with fresh registry and returns it)
-- [ ] T011 Implement assertion helpers in `testutil/assertions.go` — `AssertGauge(t, registry, name, opts...)`, `AssertGaugeExists(t, ...)`, `AssertGaugeMissing(t, ...)`, `WithLabels(pairs...)`, `WithValue(v)`
-- [ ] T012 Create `TestMain` in `prober/integration_test.go` — start Docker Compose fixtures on suite entry (skip if Docker unavailable), tear down on exit. Guard with `//go:build integration` tag.
+- [x] T004 Implement YAML config parsing and validation in `config/config.go` — load zone list from file, fail on empty/invalid config
+- [x] T005 Implement ProbeFn type and prober registry in `prober/prober.go` — define the `ProbeFn` signature, a map of check name → function, and common metrics (`dnshealth_check_success`, `dnshealth_check_duration_seconds`)
+- [x] T006 Create Docker Compose file `testdata/docker-compose.yml` — 4 CoreDNS containers (`dns-root` on `127.240.0.1`, `dns-ns1` on `127.240.0.2`, `dns-ns2` on `127.240.0.3`, `dns-ns3` on `127.240.0.4`) each with `reload 1s` and runtime zone mounts
+- [x] T007 [P] Create static Corefiles in `testdata/coredns/root/Corefile`, `testdata/coredns/ns1/Corefile`, `testdata/coredns/ns2/Corefile`, `testdata/coredns/ns3/Corefile` — each points to its runtime zone directory
+- [x] T008 [P] Create `testdata/coredns/runtime/` directory structure with `.gitkeep` files for `ns1/zones/`, `ns2/zones/`, `ns3/zones/`, `root/zones/`
+- [x] T009 Implement DNS record helpers in `testutil/records.go` — `SOA(opts...)`, `NS(name)`, `A(name, ip)`, `ZoneFile(zone, records...)` with defaults-with-override pattern over `miekg/dns` types
+- [x] T010 Implement test fixture manager in `testutil/fixture.go` — `NewDNSFixture(t)`, `WriteZone(container, content)` (replaces entire zone dir for container), `Reload(t)` (triggers CoreDNS reload and waits), `Probe(fn, zone)` (calls prober with fresh registry and returns it)
+- [x] T011 Implement assertion helpers in `testutil/assertions.go` — `AssertGauge(t, registry, name, opts...)`, `AssertGaugeExists(t, ...)`, `AssertGaugeMissing(t, ...)`, `WithLabels(pairs...)`, `WithValue(v)`
+- [x] T012 Create `TestMain` in `prober/integration_test.go` — start Docker Compose fixtures on suite entry (skip if Docker unavailable), tear down on exit. Guard with `//go:build integration` tag.
 
 **Checkpoint**: Foundation ready — Go project builds, Docker fixtures start, test helpers available. User story implementation can begin.
 

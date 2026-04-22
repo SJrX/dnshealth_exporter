@@ -1,0 +1,36 @@
+services:
+  dns-root:
+    image: coredns/coredns:latest
+    command: -conf /etc/coredns/Corefile
+    volumes:
+      - ./coredns/root/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/runtime/root/zones:/runtime/zones
+    network_mode: host
+    # Binds to 127.240.0.1:53 via Corefile bind directive
+
+  dns-ns1:
+    image: coredns/coredns:latest
+    command: -conf /etc/coredns/Corefile
+    volumes:
+      - ./coredns/ns1/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/runtime/ns1/zones:/runtime/zones
+    network_mode: host
+    # Binds to 127.240.0.2:53 via Corefile bind directive
+
+  dns-ns2:
+    image: coredns/coredns:latest
+    command: -conf /etc/coredns/Corefile
+    volumes:
+      - ./coredns/ns2/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/runtime/ns2/zones:/runtime/zones
+    network_mode: host
+    # Binds to 127.240.0.3:53 via Corefile bind directive
+
+  dns-ns3:
+    image: coredns/coredns:latest
+    command: -conf /etc/coredns/Corefile
+    volumes:
+      - ./coredns/ns3/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/runtime/ns3/zones:/runtime/zones
+    network_mode: host
+    # Binds to 127.240.0.4:53 via Corefile bind directive

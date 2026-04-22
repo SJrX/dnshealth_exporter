@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
@@ -28,7 +29,15 @@ func ProbeSOA(ctx context.Context, zone string, client *dns.Client, registry pro
 			"ip":         ns.ip,
 		}
 
-		if err := probeSOAForNS(ctx, zone, ns, client, registry, logger); err != nil {
+		start := time.Now()
+		err := probeSOAForNS(ctx, zone, ns, client, registry, logger)
+		elapsed := time.Since(start).Seconds()
+
+		newGauge(registry, "dnshealth_soa_query_duration_seconds",
+			"Duration of the SOA query to this nameserver in seconds.",
+			nsLabels, elapsed)
+
+		if err != nil {
 			logger.Warn("soa check failed for nameserver", "zone", zone, "nameserver", ns.hostname, "ip", ns.ip, "err", err)
 			newGauge(registry, "dnshealth_soa_query_success",
 				"Whether the SOA query to this nameserver succeeded (1=success, 0=failure).",

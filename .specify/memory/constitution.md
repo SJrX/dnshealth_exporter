@@ -41,10 +41,14 @@ insufficient for a network-dependent exporter.
 
 - Integration tests MUST cover each DNS check type end-to-end.
 - Tests MUST validate both successful responses and common failure
-  modes (NXDOMAIN, SERVFAIL, timeout, truncation).
+  modes (NXDOMAIN, SERVFAIL, timeout, no records in response,
+  missing glue, mismatched data between sources).
+- Every bug fix or new code path discovered during real-world
+  testing MUST have a corresponding integration test before the
+  work is considered complete.
 - Test infrastructure MUST support running against controlled DNS
-  fixtures (e.g., a local DNS server or well-known stable zones)
-  to ensure deterministic results in CI.
+  fixtures (in-process `miekg/dns` servers) to ensure
+  deterministic, fast results without external dependencies.
 - New collector functionality MUST NOT be merged without
   corresponding integration test coverage.
 

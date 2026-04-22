@@ -4,66 +4,71 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"os/exec"
-	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/miekg/dns"
+	mdns "github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sjr/dnshealth_exporter/prober"
 )
 
-// ContainerIPs maps container names to their loopback IPs.
-var ContainerIPs = map[string]string{
-	"root": "127.240.0.1",
-	"ns1":  "127.240.0.2",
-	"ns2":  "127.240.0.3",
-	"ns3":  "127.240.0.4",
-}
+const (
+	// TestPort is the fixed port used by all test DNS servers.
+	// Using a high port avoids needing root privileges.
+	TestPort = "10053"
+)
 
-// DNSFixture manages CoreDNS test fixtures.
+// DNSFixture manages in-process DNS servers for integration tests.
 type DNSFixture struct {
 	t       testing.TB
-	baseDir string
+	servers []*testServer
 }
 
-// NewDNSFixture creates a fixture manager. The baseDir should be
-// the testdata/coredns/runtime directory.
+type testServer struct {
+	addr    string
+	records []mdns.RR
+	server  *mdns.Server
+	wg      sync.WaitGroup
+}
+
+// NewDNSFixture creates a new fixture manager.
 func NewDNSFixture(t testing.TB) *DNSFixture {
-	baseDir := findRuntimeDir(t)
-	return &DNSFixture{t: t, baseDir: baseDir}
+	return &DNSFixture{t: t}
 }
 
-// WriteZone replaces the entire zone directory for a container
-// with the provided zone file content. Each test fully declares
-// what each nameserver serves.
-func (f *DNSFixture) WriteZone(container, content string) *DNSFixture {
+// Server adds an in-process DNS server at the given address
+// (e.g., "127.240.0.2:10053") serving the provided records.
+// Records are served for any query matching the zone.
+func (f *DNSFixture) Server(addr string, records ...mdns.RR) *DNSFixture {
 	f.t.Helper()
-	dir := filepath.Join(f.baseDir, container, "zones")
-	// Clear existing zone files
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		if e.Name() == ".gitkeep" {
-			continue
-		}
-		os.Remove(filepath.Join(dir, e.Name()))
-	}
-	// Write new zone file
-	zone := extractZoneName(content)
-	path := filepath.Join(dir, zone+".zone")
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		f.t.Fatalf("WriteZone(%s): %v", container, err)
-	}
+	f.servers = append(f.servers, &testServer{
+		addr:    addr,
+		records: records,
+	})
 	return f
 }
 
-// Reload waits for CoreDNS to pick up zone file changes.
-// CoreDNS is configured with reload 1s, so we wait 2s to be safe.
-func (f *DNSFixture) Reload(t testing.TB) *DNSFixture {
+// Start launches all configured DNS servers. Call this after all
+// Server() calls. Returns the fixture for chaining.
+func (f *DNSFixture) Start(t testing.TB) *DNSFixture {
 	t.Helper()
-	time.Sleep(2 * time.Second)
+	for _, srv := range f.servers {
+		startTestServer(t, srv)
+	}
+	// Brief pause to let servers bind
+	time.Sleep(50 * time.Millisecond)
 	return f
+}
+
+// Stop shuts down all DNS servers. Typically called via defer.
+func (f *DNSFixture) Stop() {
+	for _, srv := range f.servers {
+		if srv.server != nil {
+			srv.server.ShutdownContext(context.Background())
+			srv.wg.Wait()
+		}
+	}
 }
 
 // Probe calls a prober function against a zone and returns the
@@ -71,7 +76,7 @@ func (f *DNSFixture) Reload(t testing.TB) *DNSFixture {
 func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry {
 	f.t.Helper()
 	registry := prometheus.NewRegistry()
-	client := &dns.Client{Timeout: 5 * time.Second}
+	client := &mdns.Client{Timeout: 5 * time.Second}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := context.Background()
 
@@ -81,92 +86,77 @@ func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry 
 	return registry
 }
 
-// RunProber calls a named prober (with common metrics) and returns the registry.
-func (f *DNSFixture) RunProber(name, zone string) *prometheus.Registry {
-	f.t.Helper()
-	registry := prometheus.NewRegistry()
-	client := &dns.Client{Timeout: 5 * time.Second}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	ctx := context.Background()
-
-	prober.RunProber(ctx, name, zone, client, registry, logger)
-	return registry
-}
-
-func findRuntimeDir(t testing.TB) string {
+func startTestServer(t testing.TB, srv *testServer) {
 	t.Helper()
-	// Walk up from the test's working directory to find testdata
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	for {
-		candidate := filepath.Join(dir, "testdata", "coredns", "runtime")
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("could not find testdata/coredns/runtime from %s", dir)
-		}
-		dir = parent
-	}
-}
 
-func extractZoneName(content string) string {
-	// Extract zone name from $ORIGIN line or first record
-	for _, line := range splitLines(content) {
-		if len(line) > 8 && line[:8] == "$ORIGIN " {
-			name := line[8:]
-			// Remove trailing dot
-			if len(name) > 0 && name[len(name)-1] == '.' {
-				name = name[:len(name)-1]
+	mux := mdns.NewServeMux()
+	mux.HandleFunc(".", func(w mdns.ResponseWriter, r *mdns.Msg) {
+		m := new(mdns.Msg)
+		m.SetReply(r)
+		m.Authoritative = true
+
+		if len(r.Question) == 0 {
+			w.WriteMsg(m)
+			return
+		}
+
+		qname := r.Question[0].Name
+		qtype := r.Question[0].Qtype
+
+		for _, rr := range srv.records {
+			if rr.Header().Name != qname {
+				continue
 			}
-			return name
+			if qtype == mdns.TypeANY || rr.Header().Rrtype == qtype {
+				m.Answer = append(m.Answer, rr)
+			}
 		}
-	}
-	return "zone"
-}
 
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
+		// Add glue records in the Additional section for NS queries
+		if qtype == mdns.TypeNS {
+			for _, ans := range m.Answer {
+				nsRR, ok := ans.(*mdns.NS)
+				if !ok {
+					continue
+				}
+				for _, rr := range srv.records {
+					if a, ok := rr.(*mdns.A); ok && a.Header().Name == nsRR.Ns {
+						m.Extra = append(m.Extra, a)
+					}
+				}
+			}
 		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
-}
 
-// StartDockerCompose starts the Docker Compose fixtures.
-// Call this from TestMain.
-func StartDockerCompose(dir string) error {
-	cmd := exec.Command("docker", "compose", "-f",
-		filepath.Join(dir, "testdata", "docker-compose.yml"),
-		"up", "-d")
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	// Wait for CoreDNS to be ready
-	time.Sleep(3 * time.Second)
-	return nil
-}
+		w.WriteMsg(m)
+	})
 
-// StopDockerCompose stops the Docker Compose fixtures.
-func StopDockerCompose(dir string) error {
-	cmd := exec.Command("docker", "compose", "-f",
-		filepath.Join(dir, "testdata", "docker-compose.yml"),
-		"down")
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	server := &mdns.Server{
+		Addr:      srv.addr,
+		Net:       "udp",
+		Handler:   mux,
+		ReuseAddr: true,
+	}
+	srv.server = server
+
+	srv.wg.Add(1)
+	go func() {
+		defer srv.wg.Done()
+		if err := server.ListenAndServe(); err != nil {
+			// Ignore errors from shutdown
+		}
+	}()
+
+	// Wait for the server to be ready by doing a test query
+	client := &mdns.Client{Timeout: 2 * time.Second}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		msg := new(mdns.Msg)
+		msg.SetQuestion(".", mdns.TypeNS)
+		_, _, err := client.Exchange(msg, srv.addr)
+		if err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("DNS server at %s did not become ready", srv.addr)
 }

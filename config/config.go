@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -11,6 +12,32 @@ import (
 // Config is the top-level configuration for the exporter.
 type Config struct {
 	Zones []string `yaml:"zones"`
+
+	// AddressOverrides maps an IP address to a host:port pair.
+	// When the exporter discovers a nameserver at a given IP,
+	// it queries the overridden address instead.
+	//
+	// This is useful for testing (nameservers on non-standard
+	// ports) and production scenarios like querying through
+	// proxies or non-standard port deployments.
+	//
+	// Example:
+	//   address_overrides:
+	//     "127.240.0.2": "127.240.0.2:10053"
+	//     "10.0.0.5": "10.0.0.5:5353"
+	AddressOverrides map[string]string `yaml:"address_overrides"`
+}
+
+// ResolveAddress returns the address to query for a given
+// nameserver IP. If an override exists, it's used; otherwise
+// the IP is returned with the default DNS port (53).
+func (c *Config) ResolveAddress(ip string) string {
+	if c.AddressOverrides != nil {
+		if override, ok := c.AddressOverrides[ip]; ok {
+			return override
+		}
+	}
+	return net.JoinHostPort(ip, "53")
 }
 
 // Load reads and parses the configuration file at the given path.

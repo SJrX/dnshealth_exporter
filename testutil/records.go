@@ -4,9 +4,22 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 
 	"github.com/miekg/dns"
 )
+
+// serialCounter provides monotonically increasing SOA serials
+// so that CoreDNS's file plugin always accepts zone reloads.
+var serialCounter atomic.Uint32
+
+func init() {
+	serialCounter.Store(1000000)
+}
+
+func nextSerial() uint32 {
+	return serialCounter.Add(1)
+}
 
 // SOAOption configures a field on a SOA record.
 type SOAOption func(*dns.SOA)
@@ -38,6 +51,12 @@ func Minttl(n uint32) SOAOption {
 
 // SOA creates a dns.SOA record with sensible defaults.
 // Only specify the options that matter for your test.
+//
+// IMPORTANT: The serial is auto-incremented by default so that
+// CoreDNS's file plugin always accepts zone reloads (it compares
+// serials). Use Serial(n) to set a specific value — but be aware
+// that the ZoneFile wrapper will inject a higher "reload serial"
+// into a separate SOA if needed to force CoreDNS to reload.
 func SOA(zone string, opts ...SOAOption) dns.RR {
 	zone = dns.Fqdn(zone)
 	soa := &dns.SOA{
@@ -49,7 +68,7 @@ func SOA(zone string, opts ...SOAOption) dns.RR {
 		},
 		Ns:      "ns1." + zone,
 		Mbox:    "hostmaster." + zone,
-		Serial:  2026042101,
+		Serial:  nextSerial(),
 		Refresh: 3600,
 		Retry:   300,
 		Expire:  2419200,

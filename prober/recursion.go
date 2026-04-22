@@ -35,7 +35,7 @@ func probeRecursionForNS(ctx context.Context, zone string, ns nameserver, client
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeSOA)
 	msg.RecursionDesired = true
 
-	resp, _, err := client.ExchangeContext(ctx, msg, ns.ip+":53")
+	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.ip))
 	if err != nil {
 		return fmt.Errorf("querying %s: %w", ns.ip, err)
 	}

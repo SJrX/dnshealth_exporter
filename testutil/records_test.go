@@ -16,11 +16,14 @@ func TestSOA_DefaultValues(t *testing.T) {
 	if !ok {
 		t.Fatal("expected *dns.SOA")
 	}
-	if soa.Serial != 2026042101 {
-		t.Errorf("default serial: got %d, want 2026042101", soa.Serial)
+	if soa.Serial == 0 {
+		t.Error("default serial should be non-zero")
 	}
 	if soa.Hdr.Name != "example.test." {
 		t.Errorf("name: got %s, want example.test.", soa.Hdr.Name)
+	}
+	if soa.Refresh != 3600 {
+		t.Errorf("default refresh: got %d, want 3600", soa.Refresh)
 	}
 }
 

@@ -49,6 +49,12 @@ func main() {
 
 	logger.Info("Loaded configuration", "zones", len(cfg.Zones))
 
+	// Wire up address resolution from config
+	if len(cfg.AddressOverrides) > 0 {
+		prober.ResolveAddress = cfg.ResolveAddress
+		logger.Info("Address overrides configured", "count", len(cfg.AddressOverrides))
+	}
+
 	registry := prometheus.NewRegistry()
 
 	// Register build info

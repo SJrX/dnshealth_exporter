@@ -1,19 +1,30 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: (new) → 1.0.0
-  Modified principles: N/A (initial ratification)
-  Added sections:
-    - Core Principles (5 principles)
-    - Technology Stack
-    - Development Workflow
-    - Governance
+  Version change: 1.0.0 → 1.1.0 (MINOR — new principle added)
+
+  Rationale: During E2E bootstrap planning, detailed discussions
+  about testing philosophy (Meszaros, three-phase tests, fixture
+  design, real objects over mocks) and metric labeling strategy
+  (identifying labels for Grafana drill-down) revealed principles
+  that apply to all future features, not just the current one.
+  These were elevated to constitution-level to ensure consistency.
+
+  Modified principles:
+    - II. Prometheus Naming Conventions: added identifying label
+      guidance (SHOULD include hostname, IP, source labels)
+  Added principles:
+    - VIII. Readable, Honest Tests: Meszaros-based testing
+      philosophy, three-phase structure, real objects, testutil/
+      package requirement
   Removed sections: None
   Templates requiring updates:
-    - .specify/templates/plan-template.md ✅ reviewed (no changes needed,
-      Constitution Check section is dynamic)
-    - .specify/templates/spec-template.md ✅ reviewed (no changes needed)
-    - .specify/templates/tasks-template.md ✅ reviewed (no changes needed)
+    - .specify/templates/plan-template.md ✅ reviewed (no changes
+      needed, Constitution Check section is dynamic)
+    - .specify/templates/spec-template.md ✅ reviewed (no changes
+      needed)
+    - .specify/templates/tasks-template.md ✅ reviewed (no changes
+      needed)
     - .specify/templates/commands/*.md — no command templates exist
   Follow-up TODOs: None
 -->
@@ -49,6 +60,10 @@ and the OpenMetrics specification.
 - Labels MUST be lowercase, use snake_case, and avoid high
   cardinality (no unbounded label values such as raw query names
   from user input).
+- Metrics SHOULD include all available identifying labels
+  (hostname, IP address, source of data) to maximize Grafana's
+  ability to drill down, cross-reference, and detect
+  discrepancies between data sources.
 - The exporter MUST expose a `dnshealth_build_info` gauge with
   version, revision, and Go version labels.
 - The `/metrics` endpoint MUST be compatible with standard
@@ -148,6 +163,37 @@ standard tooling.
 - The binary MUST support standard operational flags (`--help`,
   `--version`, listen address, config file path, log level).
 
+### VIII. Readable, Honest Tests
+
+Tests follow xUnit Test Patterns (Meszaros). The governing
+principle: if something is important to understanding a test it
+MUST be in the test; if something is NOT important to understanding
+the test it is important that it is NOT in the test.
+
+- Every test MUST have exactly three visible phases: Fixture Setup,
+  Exercise SUT, Verification. These phases MUST NOT be interleaved.
+- Tests MUST use real objects and real infrastructure (Docker-based
+  CoreDNS), not mocks or fabricated fakes. A partially-initialized
+  struct with zero-value fields that can't exist in production is a
+  test smell.
+- Tests SHOULD be written at architectural boundaries (prober
+  functions, public API) rather than against internal
+  implementation details. This makes tests resilient to
+  refactoring and easier to understand. Unit tests of internal
+  functions are acceptable when they add clear value, but the
+  default is to test at the boundary.
+- Fixture setup MUST use defaults-with-override — only specify
+  state that matters for this test. Don't show 20 fields when
+  only 2 are relevant. Don't hide the 2 relevant fields behind
+  an abstraction.
+- Integration tests MUST use the project's `testutil/` package
+  for DNS fixture management (`WriteZone`, `ZoneFile`, record
+  helpers) and metric assertions (`AssertGauge`, `WithLabels`,
+  `WithValue`). New test infrastructure SHOULD be added to
+  `testutil/`, not invented inline.
+- If a reader cannot understand a test without opening another
+  file, the test is wrong.
+
 ## Technology Stack
 
 - **Language**: Go (latest two stable release series)
@@ -189,4 +235,4 @@ standard tooling.
   specification review (via the Constitution Check gate in
   plan.md) and during code review.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-21 | **Last Amended**: 2026-04-21
+**Version**: 1.1.0 | **Ratified**: 2026-04-21 | **Last Amended**: 2026-04-21

@@ -1,91 +1,87 @@
 # Metrics Contract: E2E Bootstrap
 
-**Date**: 2026-04-21
+**Date**: 2026-04-21 (updated)
 
 ## Endpoint
 
 - **Path**: `/metrics`
 - **Method**: GET
 - **Content-Type**: `text/plain; version=0.0.4; charset=utf-8`
-  (Prometheus exposition format)
 
 ## Global Metrics
-
-Always present regardless of zone configuration.
 
 ```prometheus
 # HELP dnshealth_build_info Build information for the exporter.
 # TYPE dnshealth_build_info gauge
 dnshealth_build_info{version="0.1.0",revision="abc1234",goversion="go1.26.2"} 1
-```
 
-## Per-Check Metrics
-
-Present for each (zone, check) combination.
-
-```prometheus
 # HELP dnshealth_check_success Whether the check succeeded (1=success, 0=failure).
 # TYPE dnshealth_check_success gauge
 dnshealth_check_success{zone="example.test",check="soa"} 1
-dnshealth_check_success{zone="example.test",check="recursion"} 1
-dnshealth_check_success{zone="example.test",check="glue"} 1
 
 # HELP dnshealth_check_duration_seconds Duration of the check in seconds.
 # TYPE dnshealth_check_duration_seconds gauge
 dnshealth_check_duration_seconds{zone="example.test",check="soa"} 0.042
-dnshealth_check_duration_seconds{zone="example.test",check="recursion"} 0.018
-dnshealth_check_duration_seconds{zone="example.test",check="glue"} 0.091
 ```
 
 ## SOA Check Metrics
 
+Per-nameserver query status and timing:
+
 ```prometheus
-# HELP dnshealth_soa_serial SOA serial number.
-# TYPE dnshealth_soa_serial gauge
-dnshealth_soa_serial{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2"} 2026042101
+# HELP dnshealth_soa_query_success Whether the SOA query succeeded (1=success, 0=failure).
+# TYPE dnshealth_soa_query_success gauge
+dnshealth_soa_query_success{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2"} 1
 
-# HELP dnshealth_soa_refresh_seconds SOA REFRESH interval in seconds.
-# TYPE dnshealth_soa_refresh_seconds gauge
-dnshealth_soa_refresh_seconds{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2"} 3600
-
-# HELP dnshealth_soa_retry_seconds SOA RETRY interval in seconds.
-# TYPE dnshealth_soa_retry_seconds gauge
-dnshealth_soa_retry_seconds{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2"} 300
-
-# HELP dnshealth_soa_expire_seconds SOA EXPIRE interval in seconds.
-# TYPE dnshealth_soa_expire_seconds gauge
-dnshealth_soa_expire_seconds{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2"} 2419200
-
-# HELP dnshealth_soa_minimum_seconds SOA MINIMUM TTL (negative caching) in seconds.
-# TYPE dnshealth_soa_minimum_seconds gauge
-dnshealth_soa_minimum_seconds{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2"} 300
+# HELP dnshealth_soa_query_duration_seconds Duration of the SOA query in seconds.
+# TYPE dnshealth_soa_query_duration_seconds gauge
+dnshealth_soa_query_duration_seconds{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2"} 0.023
 ```
 
-## Recursion Available Metrics
+Per-nameserver SOA field gauges (only present when query succeeds):
 
 ```prometheus
-# HELP dnshealth_ns_recursion_available Whether the nameserver allows recursive queries (1=allows, 0=refuses).
+dnshealth_soa_serial{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2"} 2026042101
+dnshealth_soa_refresh_seconds{zone="...",nameserver="...",ip="..."} 3600
+dnshealth_soa_retry_seconds{...} 300
+dnshealth_soa_expire_seconds{...} 2419200
+dnshealth_soa_minimum_seconds{...} 300
+```
+
+## Recursion Check Metrics
+
+```prometheus
+# HELP dnshealth_recursion_query_success Whether the recursion query succeeded.
+# TYPE dnshealth_recursion_query_success gauge
+dnshealth_recursion_query_success{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2"} 1
+
+# HELP dnshealth_ns_recursion_available Whether the nameserver allows recursion (1=allows, 0=refuses).
 # TYPE dnshealth_ns_recursion_available gauge
-dnshealth_ns_recursion_available{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2"} 0
-dnshealth_ns_recursion_available{zone="example.test",nameserver="ns2.example.test",ip="127.240.0.3"} 0
+dnshealth_ns_recursion_available{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2"} 0
 ```
 
 ## Glue Consistency Metrics
 
-Info-style metrics with `source` label for multi-source comparison.
+Per-nameserver query status:
+
+```prometheus
+# HELP dnshealth_glue_query_success Whether the glue self-query succeeded.
+# TYPE dnshealth_glue_query_success gauge
+dnshealth_glue_query_success{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2"} 1
+```
+
+Info-style metrics with `source` label for multi-source comparison:
 
 ```prometheus
 # HELP dnshealth_ns_record NS record presence by source (value always 1).
 # TYPE dnshealth_ns_record gauge
-dnshealth_ns_record{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2",source="parent"} 1
-dnshealth_ns_record{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2",source="self"} 1
-dnshealth_ns_record{zone="example.test",nameserver="ns2.example.test",ip="127.240.0.3",source="parent"} 1
-dnshealth_ns_record{zone="example.test",nameserver="ns2.example.test",ip="127.240.0.3",source="self"} 1
+dnshealth_ns_record{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2",source="parent"} 1
+dnshealth_ns_record{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2",source="self"} 1
 
 # HELP dnshealth_ns_glue Glue/A record presence by source (value always 1).
 # TYPE dnshealth_ns_glue gauge
-dnshealth_ns_glue{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2",source="parent"} 1
-dnshealth_ns_glue{zone="example.test",nameserver="ns1.example.test",ip="127.240.0.2",source="self"} 1
+dnshealth_ns_glue{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2",source="parent"} 1
+dnshealth_ns_glue{zone="example.test",nameserver="ns1.example.test.",ip="127.240.0.2",source="self"} 1
 ```
 
 ## Labels
@@ -97,9 +93,6 @@ dnshealth_ns_glue{zone="example.test",nameserver="ns1.example.test",ip="127.240.
 | `nameserver` | NS hostname | Low (per-zone NS count) |
 | `ip` | Nameserver IP address | Low (per-NS, usually 1) |
 | `source` | Data source (`parent`, `self`) | 2 (fixed) |
-| `version` | Exporter version | 1 |
-| `revision` | Git revision | 1 |
-| `goversion` | Go version | 1 |
 
 ## Other Endpoints
 

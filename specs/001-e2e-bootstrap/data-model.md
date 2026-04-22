@@ -1,44 +1,40 @@
 # Data Model: E2E Bootstrap
 
-**Date**: 2026-04-21
+**Date**: 2026-04-21 (updated)
 **Feature**: E2E Bootstrap (`001-e2e-bootstrap`)
 
 ## Entities
 
 ### Configuration (YAML file)
 
-Intentionally minimal for v1. Just a list of zone names.
+Minimal for v1. Zone list with optional address overrides.
 
 - `zones` ([]string, required): DNS zone names to monitor
-  (e.g., `example.com`, `example.org`)
-
-Nameservers are discovered by querying NS records — that discovery
-is itself part of the health check. Per-zone overrides and check
-toggles are out of scope for v1.
+- `address_overrides` (map[string]string, optional): Maps an IP
+  to a custom host:port pair. Used in tests (port 10053) and
+  for production scenarios with non-standard ports.
 
 ### Zone (Runtime)
 
 The primary unit of monitoring, derived from config.
 
 - `name` (string): DNS zone name from config
-- `nameservers` ([]Nameserver): Discovered via NS query at runtime
+- `nameservers` ([]Nameserver): Discovered via delegation walk
 
 ### Nameserver (Runtime, discovered)
 
-A nameserver serving a zone. Discovered by querying NS records,
-not configured.
+Discovered by walking the delegation chain from root servers.
 
-- `hostname` (string): NS record value (e.g., `ns1.example.com`)
+- `hostname` (string): NS record value (e.g., `ns1.example.com.`)
 - `ip` (string): Resolved A record for the hostname
 
-### Check Result (Runtime)
+### DelegationResult (Runtime)
 
-Internal structure bridging probers and metrics. Not persisted.
+The parent's delegation response, obtained by walking from root.
 
-- `zone` (string): Zone that was checked
-- `check` (string): Check type name (`soa`, `recursion`, `glue`)
-- `success` (bool): Whether the check completed without error
-- `duration` (time.Duration): How long the check took
+- `ParentServer` (string): Address of the parent that provided delegation
+- `NSRecords` ([]Nameserver): NS records from delegation
+- `Glue` ([]Nameserver): A records from delegation additional section
 
 ## Configuration File Example
 
@@ -46,19 +42,27 @@ Internal structure bridging probers and metrics. Not persisted.
 zones:
   - example.com
   - example.org
+
+# Optional: override addresses for testing or non-standard ports
+address_overrides:
+  "127.240.0.2": "127.240.0.2:10053"
 ```
 
 ## Relationships
 
 ```text
 Config File (YAML)
-└── zones[] (list of strings)
+├── zones[] (list of strings)
+└── address_overrides (optional map)
 
 Runtime
-└���─ Zone (per configured zone name)
-    ├── NS discovery → Nameserver[] (hostname + IP)
-    └── Check Execution (per check type)
-        ├── Queries parent and/or each nameserver
-        ├── Check Result
-        └── Prometheus Metrics (on shared registry)
+└── Zone (per configured zone name)
+    ├── WalkDelegation (root → TLD → parent)
+    │   └── DelegationResult (parent's NS + glue)
+    ├── discoverNameservers (from delegation + hostname resolution)
+    │   └── Nameserver[] (hostname + IP)
+    └── Check Execution (per prober)
+        ├── Per-nameserver queries
+        ├── query_success + query_duration metrics
+        └── Check-specific metrics (on registry)
 ```

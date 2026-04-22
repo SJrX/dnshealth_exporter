@@ -65,73 +65,58 @@ specs/001-e2e-bootstrap/
 .
 ├── main.go                      # Entry point: flags, config load, server
 ├── config/
-│   └── config.go                # YAML config parsing, validation
+│   ├── config.go                # YAML config parsing, validation, address overrides
+│   └── config_test.go           # Config unit tests
 ├── prober/
-│   ├── prober.go                # ProbeFn type, prober registry
+│   ├── prober.go                # ProbeFn type, prober registry, delegation walker
 │   ├── soa.go                   # SOA check prober
-│   ├── soa_test.go              # SOA integration tests
+│   ├── soa_test.go              # SOA integration tests (10 tests)
 │   ├── recursion.go             # Recursion-available check prober
-│   ├── recursion_test.go        # Recursion integration tests
+│   ├── recursion_test.go        # Recursion integration tests (3 tests)
 │   ├── glue.go                  # Glue consistency check prober
-│   └── glue_test.go             # Glue integration tests
+│   ├── glue_test.go             # Glue integration tests (5 tests)
+│   └── integration_test.go      # TestMain: sets RootServers + ResolveAddress
 ├── testutil/
-│   ├── fixture.go               # DNSFixture: WriteZone, Reload, Probe
-│   ├── records.go               # SOA(), NS(), A(), ZoneFile() helpers
-│   └── assertions.go            # AssertGauge, WithLabels, WithValue
-├── testdata/
-│   ├── docker-compose.yml       # CoreDNS fixture orchestration
-│   ├── coredns/
-│   │   ├── root/
-│   │   │   └── Corefile          # Root/parent Corefile (static)
-│   │   ├── ns1/
-│   │   │   └── Corefile          # NS1 Corefile (static, points to runtime zones)
-│   │   ├── ns2/
-│   │   │   └── Corefile          # NS2 Corefile (static)
-│   │   ├── ns3/
-│   │   │   └── Corefile          # NS3 Corefile (static)
-│   │   └── runtime/             # Zone files written by tests at runtime
-│   │       ├── ns1/zones/
-│   │       ├── ns2/zones/
-│   │       ├── ns3/zones/
-│   │       └── root/zones/
-│   └── configs/
-│       └── integration.yml       # Exporter config for tests
+│   ├── fixture.go               # DNSFixture: Server, ReferralServer, Probe
+│   ├── records.go               # SOA(), NS(), A() helpers (miekg/dns wrappers)
+│   ├── records_test.go          # Record helper unit tests
+│   └── assertions.go            # AssertGauge, AssertGaugeInRange, WithLabels
 ├── go.mod
 ├── go.sum
-├── dnshealth.yml                 # Example config
-├── Makefile                      # Build, test, lint targets
+├── dnshealth.yml                # Example config
+├── Makefile                     # Build, test, test-integration, vet, fmt
 ├── README.md
 └── LICENSE
 ```
 
 **Structure Decision**: Single flat project following blackbox_exporter
 conventions. `config/` for config parsing, `prober/` for check
-implementations, `testdata/` for Docker Compose + CoreDNS fixtures.
+implementations and delegation walking, `testutil/` for in-process
+DNS test servers and assertion helpers.
 No `internal/` or `pkg/` — keep it simple for v0.1.
 
 ## Testing Approach
 
 See `research.md` for full details. Key decisions:
 
+- **In-process DNS servers** via `miekg/dns` — no Docker, no external
+  dependencies. Each test starts its own servers on `127.240.0.x:10053`
+  and tears them down after. Sub-second test runs.
 - **Three-phase tests** (Meszaros): Fixture Setup → Exercise SUT
   → Verification. Important values visible in both setup and
   assertions.
-- **Thin fixture helpers** over `miekg/dns` types: `SOA(Serial(n))`,
-  `NS("hostname")`, `A("name", "ip")`, `ZoneFile(zone, records...)`.
-  Defaults-with-override — only test-relevant fields specified.
-- **Per-test zone files**: `WriteZone("ns1", ...)` replaces the
-  entire zone directory for that container. Each test fully declares
-  what each nameserver serves. No cleanup needed — previous state
-  is overwritten.
-- **Domain assertion helpers**: `AssertGauge(t, registry, name, opts...)`
-  with `WithLabels()` and `WithValue()` matchers.
-- **Docker containers start once** in `TestMain`, not per-test.
-  `Reload(t)` triggers CoreDNS zone reload between tests.
-- **Sequential execution**: integration tests run with
-  `-count=1 -parallel=1`.
-- **Not a full DSL**: thin functional helpers are sufficient for
-  ~3 check types. Refactorable into a fluent DSL later if fixture
-  complexity grows.
+- **Two server types**: `Server()` for authoritative nameservers,
+  `ReferralServer()` for parent/TLD servers that return delegations
+  in the Authority section. `ServerWithOptions()` for custom behavior
+  (recursion available, NXDOMAIN, drop/timeout, garbage responses).
+- **Thin record helpers** over `miekg/dns` types: `SOA(zone, Serial(n))`,
+  `NS(zone, hostname)`, `A(name, ip)`. Defaults-with-override.
+- **Domain assertion helpers**: `AssertGauge(t, registry, name, opts...)`,
+  `AssertGaugeExists`, `AssertGaugeMissing`, `AssertGaugeInRange`,
+  `WithLabels()`, `WithValue()`.
+- **Same code path as production**: Tests override only `RootServers`
+  and `ResolveAddress`. The delegation walker, nameserver discovery,
+  and probers run identical code in tests and production.
 
 ## Check Types
 
@@ -168,34 +153,26 @@ doesn't, we learn what needs to change before building more.
 See `research.md` for the full metric design and the open
 questions about convenience booleans vs raw info metrics.
 
-## CoreDNS Test Fixture Design
+## Test Fixture Design
 
-| Container | Role | IP | Port | Purpose |
-|-----------|------|-----|------|---------|
-| `dns-root` | Parent/root | `127.240.0.1` | 53 | Delegates `example.test` to ns1, ns2, ns3 |
-| `dns-ns1` | Authoritative NS1 | `127.240.0.2` | 53 | Serves `example.test` (correct config) |
-| `dns-ns2` | Authoritative NS2 | `127.240.0.3` | 53 | Serves `example.test` (matches ns1) |
-| `dns-ns3` | Authoritative NS3 | `127.240.0.4` | 53 | Serves `example.test` (deliberately mismatched glue/NS) |
+In-process DNS servers using `miekg/dns`. Each test creates its own
+servers — no shared state between tests, no Docker.
 
-Using `.test` TLD (RFC 2606 reserved) to avoid any real DNS
-leakage.
+| Server Type | API | Behavior |
+|-------------|-----|----------|
+| `Server()` | Authoritative | Returns records in Answer section, AA flag set |
+| `ReferralServer()` | Parent/TLD | Returns NS in Authority + glue in Additional, no AA flag |
+| `ServerWithOptions()` | Configurable | Supports RecursionAvailable, Rcode override, Drop (timeout), Garbage |
 
-**ns3 mismatch scenario**: The parent delegates to ns1, ns2, ns3
-with specific glue IPs. ns3 returns different NS records or A
-records for itself, creating a detectable glue inconsistency.
-This exercises the failure path in integration tests.
+All servers bind to `127.240.0.x:10053` using `.test` TLD (RFC 2606).
 
-CoreDNS Corefile sketch (ns1/ns2 — static, points to runtime dir):
-```
-. {
-    file /runtime/zones/{zonefile}
-    reload 1s
-    log
-}
-```
+**Test coverage** (18 integration tests):
 
-The `reload 1s` directive lets CoreDNS pick up zone file changes
-written by test fixtures without container restarts.
+- SOA: serial consistency, all fields, serial drift, no SOA in
+  response, single NS, no-glue resolution, timeout, NXDOMAIN, garbage
+- Recursion: refusal, allows recursion, mixed across NSes
+- Glue: consistent, mismatched NS, different IPs by source,
+  no glue from parent (3-level delegation), partial glue
 
 ## Complexity Tracking
 

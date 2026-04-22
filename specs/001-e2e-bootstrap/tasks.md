@@ -69,7 +69,7 @@
 - [x] T019 [US1] Implement recursion-available prober in `prober/recursion.go` — query each nameserver with RD flag set, check RA bit in response, register `dnshealth_ns_recursion_available` gauge with zone/nameserver/ip labels
 - [x] T020 [US1] Implement glue consistency prober in `prober/glue.go` — query parent for NS records + glue (A records), query each authoritative NS for its own NS + A records, register `dnshealth_ns_record` and `dnshealth_ns_glue` info metrics with zone/nameserver/ip/source labels
 - [x] T021 [US1] Implement `main.go` — parse flags with kingpin (`--config.file`, `--web.listen-address`, `--web.config.file`, `--log.level`, `--log.format`, `--version`), load config, set up promslog logger, create Prometheus registry, register `dnshealth_build_info` gauge, run all probers for each configured zone, serve `/metrics` via exporter-toolkit web server with landing page
-- [ ] T022 [US1] Verify all metrics pass `promtool check metrics` validation — run exporter against Docker fixtures, curl `/metrics`, pipe through `promtool check metrics`
+- [x] T022 [US1] Verify all metrics pass `promtool check metrics` validation — run exporter against Docker fixtures, curl `/metrics`, pipe through `promtool check metrics`
 
 **Checkpoint**: Exporter builds, starts, runs SOA + recursion + glue checks against Docker fixtures, and exposes valid Prometheus metrics. All US1 integration tests pass.
 
@@ -83,14 +83,14 @@
 
 ### Tests for User Story 2
 
-- [ ] T023 [US2] Integration test for graceful shutdown in `main_test.go` — start exporter binary as subprocess, verify it's listening, send SIGTERM, assert exit code 0 and shutdown log message
-- [ ] T024 [US2] Integration test for invalid config in `main_test.go` — start exporter binary with invalid config file, assert non-zero exit code and error message on stderr
+- [x] T023 [US2] Integration test for graceful shutdown in `main_test.go` — start exporter binary as subprocess, verify it's listening, send SIGTERM, assert exit code 0 and shutdown log message
+- [x] T024 [US2] Integration test for invalid config in `main_test.go` — start exporter binary with invalid config file, assert non-zero exit code and error message on stderr
 
 ### Implementation for User Story 2
 
-- [ ] T025 [US2] Add signal handling to `main.go` — listen for SIGTERM/SIGINT, trigger graceful shutdown (close HTTP server with context timeout, flush logs), exit 0 on clean shutdown
-- [ ] T026 [US2] Add config validation to `config/config.go` — fail fast with clear error messages for: missing file, invalid YAML, empty zone list, zone names that don't look like domain names
-- [ ] T027 [US2] Add `/-/healthy` endpoint to `main.go` — returns 200 OK when the exporter is running
+- [x] T025 [US2] Add signal handling to `main.go` — listen for SIGTERM/SIGINT, trigger graceful shutdown (close HTTP server with context timeout, flush logs), exit 0 on clean shutdown
+- [x] T026 [US2] Add config validation to `config/config.go` — fail fast with clear error messages for: missing file, invalid YAML, empty zone list, zone names that don't look like domain names
+- [x] T027 [US2] Add `/-/healthy` endpoint to `main.go` — returns 200 OK when the exporter is running
 
 **Checkpoint**: Binary starts cleanly, handles signals, fails fast on bad config. All US2 tests pass.
 
@@ -104,10 +104,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Add unit tests for config parsing in `config/config_test.go` — test valid config, empty zones, missing file, invalid YAML. No Docker dependency.
-- [ ] T029 [US3] Add unit tests for record helpers in `testutil/records_test.go` — verify `SOA()`, `NS()`, `A()`, `ZoneFile()` produce valid `miekg/dns` records and zone file text. No Docker dependency.
-- [ ] T030 [US3] Update `README.md` with quickstart instructions — build, configure, run, verify metrics, run unit tests, run integration tests (Docker Compose up/down commands)
-- [ ] T031 [US3] Add `.gitignore` entries for `testdata/coredns/runtime/*/zones/*.zone` (generated at test time, should not be committed)
+- [x] T028 [US3] Add unit tests for config parsing in `config/config_test.go` — test valid config, empty zones, missing file, invalid YAML. No Docker dependency.
+- [x] T029 [US3] Add unit tests for record helpers in `testutil/records_test.go` — verify `SOA()`, `NS()`, `A()`, `ZoneFile()` produce valid `miekg/dns` records and zone file text. No Docker dependency.
+- [x] T030 [US3] Update `README.md` with quickstart instructions — build, configure, run, verify metrics, run unit tests, run integration tests (Docker Compose up/down commands)
+- [x] T031 [US3] Add `.gitignore` entries for `testdata/coredns/runtime/*/zones/*.zone` (generated at test time, should not be committed)
 
 **Checkpoint**: Developer can clone, build, run unit tests (no Docker), and run integration tests (with Docker). README documents the full workflow.
 
@@ -117,11 +117,11 @@
 
 **Purpose**: Final validation and cleanup
 
-- [ ] T032 Run `go vet ./...` and fix any issues
-- [ ] T033 Run `gofmt -s -w .` to ensure consistent formatting
-- [ ] T034 Verify all integration tests pass end-to-end: `make docker-up && make test-integration && make docker-down`
-- [ ] T035 Run quickstart.md validation — follow the quickstart steps from scratch and verify they work
-- [ ] T036 Verify `promtool check metrics` passes against live exporter output
+- [x] T032 Run `go vet ./...` and fix any issues
+- [x] T033 Run `gofmt -s -w .` to ensure consistent formatting
+- [x] T034 Verify all integration tests pass end-to-end: `make docker-up && make test-integration && make docker-down`
+- [x] T035 Run quickstart.md validation — follow the quickstart steps from scratch and verify they work
+- [x] T036 Verify `promtool check metrics` passes against live exporter output
 
 ---
 

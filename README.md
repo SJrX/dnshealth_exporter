@@ -11,9 +11,56 @@ Monitors DNS zones and exposes granular metrics for building Grafana dashboards 
 - **Detection, not policy** — the exporter exposes raw signals; thresholds, alerting rules, and SLA definitions belong in Grafana/Alertmanager.
 - **Explore Spec Kit** — this project is also an opportunity to practice and explore [Spec Kit](https://github.com/github/spec-kit), a spec-driven development toolkit for AI-assisted workflows. The `.specify/` directory contains the project's specifications, plans, and constitution generated through the Spec Kit process.
 
+## Quick Start
+
+### Prerequisites
+
+- Go 1.26+
+- Docker and Docker Compose (for integration tests)
+
+### Build
+
+```bash
+go build -o dnshealth_exporter .
+```
+
+### Configure
+
+Create `dnshealth.yml`:
+
+```yaml
+zones:
+  - example.com
+  - example.org
+```
+
+### Run
+
+```bash
+./dnshealth_exporter --config.file=dnshealth.yml
+```
+
+Visit http://localhost:9199/metrics to see output.
+
+### Test
+
+Unit tests (no Docker needed):
+
+```bash
+go test ./...
+```
+
+Integration tests (requires Docker):
+
+```bash
+make docker-up
+make test-integration
+make docker-down
+```
+
 ## Status
 
-Early development.
+Early development — SOA, recursion-available, and glue consistency checks implemented.
 
 ## License
 

@@ -24,10 +24,17 @@ type DNSFixture struct {
 	servers []*testServer
 }
 
+// ServerOptions configures test server behavior.
+type ServerOptions struct {
+	// RecursionAvailable makes the server set the RA flag in responses.
+	RecursionAvailable bool
+}
+
 type testServer struct {
 	addr     string
 	records  []mdns.RR
 	referral bool // if true, return NS records as referrals (Authority section)
+	options  ServerOptions
 	server   *mdns.Server
 	wg       sync.WaitGroup
 }
@@ -43,6 +50,17 @@ func (f *DNSFixture) Server(addr string, records ...mdns.RR) *DNSFixture {
 	f.servers = append(f.servers, &testServer{
 		addr:    addr,
 		records: records,
+	})
+	return f
+}
+
+// ServerWithOptions adds an authoritative server with custom behavior.
+func (f *DNSFixture) ServerWithOptions(addr string, opts ServerOptions, records ...mdns.RR) *DNSFixture {
+	f.t.Helper()
+	f.servers = append(f.servers, &testServer{
+		addr:    addr,
+		records: records,
+		options: opts,
 	})
 	return f
 }
@@ -122,9 +140,8 @@ func startTestServer(t testing.TB, srv *testServer) {
 			}
 		}
 
-		if srv.referral && qtype == mdns.TypeNS {
+		if srv.referral && len(matched) > 0 && qtype == mdns.TypeNS {
 			// Referral mode: NS records go in Authority, glue in Additional.
-			// Response is NOT authoritative (simulates parent delegation).
 			m.Authoritative = false
 			m.Ns = matched
 			for _, ns := range matched {
@@ -138,9 +155,20 @@ func startTestServer(t testing.TB, srv *testServer) {
 					}
 				}
 			}
+		} else if srv.referral && len(matched) == 0 {
+			// No exact match — look for a parent zone to refer to.
+			// Walk up the qname labels to find a zone we can delegate.
+			// e.g., query for "ns1.other.test." → find NS for "other.test."
+			referralNS, referralExtra := findReferral(srv.records, qname)
+			if len(referralNS) > 0 {
+				m.Authoritative = false
+				m.Ns = referralNS
+				m.Extra = referralExtra
+			}
 		} else {
 			// Authoritative mode: records in Answer section.
 			m.Authoritative = true
+			m.RecursionAvailable = srv.options.RecursionAvailable
 			m.Answer = matched
 
 			// Add glue in Additional for NS queries
@@ -191,4 +219,45 @@ func startTestServer(t testing.TB, srv *testServer) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("DNS server at %s did not become ready", srv.addr)
+}
+
+// findReferral walks up the labels of qname to find NS records
+// for a parent zone in the server's record set. Returns the NS
+// records and any matching glue A records.
+func findReferral(records []mdns.RR, qname string) (ns []mdns.RR, extra []mdns.RR) {
+	// Walk up: "ns1.other.test." → "other.test." → "test." → "."
+	name := qname
+	for {
+		idx := 0
+		for idx < len(name) && name[idx] != '.' {
+			idx++
+		}
+		if idx >= len(name) {
+			break
+		}
+		name = name[idx+1:] // strip first label
+		if name == "" {
+			break
+		}
+
+		// Look for NS records matching this parent zone
+		for _, rr := range records {
+			if nsRR, ok := rr.(*mdns.NS); ok && nsRR.Header().Name == name {
+				ns = append(ns, rr)
+			}
+		}
+		if len(ns) > 0 {
+			// Found a referral — collect glue
+			for _, nsRR := range ns {
+				nsName := nsRR.(*mdns.NS).Ns
+				for _, rr := range records {
+					if a, ok := rr.(*mdns.A); ok && a.Header().Name == nsName {
+						extra = append(extra, a)
+					}
+				}
+			}
+			return ns, extra
+		}
+	}
+	return nil, nil
 }

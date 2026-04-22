@@ -247,31 +247,74 @@ func discoverNameservers(ctx context.Context, zone string, client *dns.Client, l
 			servers = append(servers, ns)
 			continue
 		}
-		// No glue — resolve the NS hostname
-		aMsg := new(dns.Msg)
-		aMsg.SetQuestion(ns.hostname, dns.TypeA)
-		// Query a server we already know about
-		resolver := RootServers[0]
-		if len(servers) > 0 {
-			resolver = ResolveAddress(servers[0].ip)
-		}
-		aResp, _, err := client.ExchangeContext(ctx, aMsg, resolver)
+		// No glue — resolve the NS hostname by walking the
+		// delegation chain for the hostname's parent zone.
+		ip, err := resolveHostname(ctx, ns.hostname, client, logger)
 		if err != nil {
-			logger.Warn("could not resolve NS hostname", "ns", ns.hostname, "err", err)
+			logger.Warn("could not resolve NS hostname",
+				"ns", ns.hostname, "err", err)
 			continue
 		}
-		for _, rr := range aResp.Answer {
-			if a, ok := rr.(*dns.A); ok {
-				servers = append(servers, nameserver{hostname: ns.hostname, ip: a.A.String()})
-				break
-			}
-		}
+		servers = append(servers, nameserver{hostname: ns.hostname, ip: ip})
 	}
 
 	if len(servers) == 0 {
 		return nil, fmt.Errorf("no nameservers found for zone %s", zone)
 	}
 	return servers, nil
+}
+
+// resolveHostname resolves a DNS hostname to an IPv4 address by
+// walking the delegation chain from root. This handles the no-glue
+// case where the parent doesn't provide A records for nameservers
+// in a different zone.
+func resolveHostname(ctx context.Context, hostname string, client *dns.Client, logger *slog.Logger) (string, error) {
+	hostname = dns.Fqdn(hostname)
+
+	// Walk referrals from root to find who's authoritative for this name
+	server := RootServers[0]
+	for depth := 0; depth < 10; depth++ {
+		msg := new(dns.Msg)
+		msg.SetQuestion(hostname, dns.TypeA)
+		msg.RecursionDesired = false
+
+		resp, _, err := client.ExchangeContext(ctx, msg, server)
+		if err != nil {
+			return "", fmt.Errorf("querying %s for %s: %w", server, hostname, err)
+		}
+
+		// Check for A record in answer
+		for _, rr := range resp.Answer {
+			if a, ok := rr.(*dns.A); ok {
+				return a.A.String(), nil
+			}
+		}
+
+		// Follow referral
+		if len(resp.Ns) > 0 {
+			glueMap := make(map[string]string)
+			for _, rr := range resp.Extra {
+				if a, ok := rr.(*dns.A); ok {
+					glueMap[a.Hdr.Name] = a.A.String()
+				}
+			}
+
+			for _, rr := range resp.Ns {
+				if nsRR, ok := rr.(*dns.NS); ok {
+					if ip, ok := glueMap[nsRR.Ns]; ok {
+						server = ResolveAddress(ip)
+						goto nextHop
+					}
+				}
+			}
+			return "", fmt.Errorf("referral from %s has no glue for %s", server, hostname)
+		}
+
+		return "", fmt.Errorf("no answer and no referral from %s for %s", server, hostname)
+	nextHop:
+	}
+
+	return "", fmt.Errorf("resolution exceeded max depth for %s", hostname)
 }
 
 // newGauge creates a new gauge, registers it, and sets its value.

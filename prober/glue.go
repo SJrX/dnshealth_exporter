@@ -24,6 +24,20 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 		return fmt.Errorf("glue: %w", err)
 	}
 
+	// Resolve missing IPs for nameservers without glue
+	for i, ns := range delegation.NSRecords {
+		if ns.ip != "" {
+			continue
+		}
+		ip, err := resolveHostname(ctx, ns.hostname, client, logger)
+		if err != nil {
+			logger.Warn("glue: could not resolve NS without glue",
+				"zone", zone, "nameserver", ns.hostname, "err", err)
+			continue
+		}
+		delegation.NSRecords[i].ip = ip
+	}
+
 	// Register parent's NS records
 	for _, ns := range delegation.NSRecords {
 		labels := prometheus.Labels{
@@ -37,7 +51,7 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 			labels, 1)
 	}
 
-	// Register parent's glue
+	// Register parent's glue (only records where parent provided glue)
 	for _, g := range delegation.Glue {
 		labels := prometheus.Labels{
 			"zone":       zone,
@@ -55,7 +69,7 @@ func ProbeGlue(ctx context.Context, zone string, client *dns.Client, registry pr
 
 	for _, ns := range delegation.NSRecords {
 		if ns.ip == "" {
-			logger.Warn("glue: no IP for nameserver, skipping self-query",
+			logger.Warn("glue: no IP for nameserver after resolution, skipping",
 				"zone", zone, "nameserver", ns.hostname)
 			continue
 		}

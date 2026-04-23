@@ -6,20 +6,21 @@
 ## Summary
 
 Bootstrap the dnshealth_exporter project with a working end-to-end
-flow: a Go binary that reads a YAML config of DNS zones, runs three
-check types (SOA, recursion-available, glue consistency), and exposes
-Prometheus metrics on `/metrics`. The glue consistency check is the
-key proof point — it validates the multi-source comparison pattern
-(`source` label) that underpins most valuable intodns/Zonemaster
-checks. Includes Docker Compose + CoreDNS integration test fixtures
-on `127.240.0.0/24`.
+flow: a Go binary that reads a YAML config of DNS zones, walks the
+delegation chain from root servers, runs three check types (SOA,
+recursion-available, glue consistency), and exposes Prometheus
+metrics on `/metrics`. The glue consistency check is the key proof
+point — it validates the multi-source comparison pattern (`source`
+label) that underpins most valuable intodns/Zonemaster checks.
+Integration tests use in-process `miekg/dns` servers on
+`127.240.0.0/24`.
 
 ## Technical Context
 
 **Language/Version**: Go 1.26.x (installed: 1.26.2)
 **Primary Dependencies**: `prometheus/client_golang`, `prometheus/exporter-toolkit`, `prometheus/common/promslog`, `alecthomas/kingpin/v2`, `miekg/dns`
 **Storage**: N/A (stateless exporter)
-**Testing**: `go test` with `-tags=integration` build tag; Docker Compose + CoreDNS for integration fixtures
+**Testing**: `go test` with `-tags=integration` build tag; in-process `miekg/dns` servers for integration fixtures
 **Target Platform**: Linux (primary)
 **Project Type**: Prometheus exporter (long-running daemon)
 **Performance Goals**: Respond to scrape within 1s of readiness; start in under 2s
@@ -32,7 +33,7 @@ on `127.240.0.0/24`.
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Robust Integration Testing | PASS | Docker/CoreDNS fixtures (FR-011..013). Integration tests call probers in-process. Glue mismatch fixture validates failure path. |
+| I. Robust Integration Testing | PASS | In-process miekg/dns fixtures (FR-011..013). 18 integration tests cover happy paths, failure modes, and edge cases. |
 | II. Prometheus Naming Conventions | PASS | `dnshealth_` prefix, snake_case, unit suffixes, identifying labels (zone, nameserver, ip, source). |
 | III. Modern Go Ecosystem | PASS | Go 1.26.x, miekg/dns v1, client_golang, Go modules. |
 | IV. Structured Logging | PASS | promslog (slog-based). Log levels defined. |

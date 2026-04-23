@@ -13,11 +13,11 @@ An operator configures the exporter with one or more DNS zones, starts the binar
 
 **Why this priority**: This is the fundamental value proposition — without a working scrape endpoint producing real DNS metrics, nothing else matters.
 
-**Independent Test**: Start the exporter configured against the Docker-based test DNS infrastructure, curl `/metrics`, and verify Prometheus-format output containing `dnshealth_` prefixed metrics with zone labels.
+**Independent Test**: Start the exporter, curl `/metrics`, and verify Prometheus-format output containing `dnshealth_` prefixed metrics with zone labels.
 
 **Acceptance Scenarios**:
 
-1. **Given** the exporter is configured with a test zone served by the Docker DNS fixtures, **When** Prometheus scrapes `/metrics`, **Then** the response contains `dnshealth_` prefixed metrics with a `zone` label matching the configured zone.
+1. **Given** the exporter is configured with one or more zones, **When** Prometheus scrapes `/metrics`, **Then** the response contains `dnshealth_` prefixed metrics with a `zone` label matching each configured zone.
 2. **Given** the exporter is running, **When** Prometheus scrapes `/metrics`, **Then** the response is valid Prometheus exposition format (parseable by `promtool check metrics`).
 3. **Given** the exporter is configured with multiple zones, **When** Prometheus scrapes `/metrics`, **Then** metrics are returned for each configured zone.
 

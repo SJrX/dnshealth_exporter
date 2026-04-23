@@ -4,6 +4,9 @@ dnshealth_exporter
 *.test
 *.out
 
+# GoReleaser
+dist/
+
 
 # IDE
 .vscode/

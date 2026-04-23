@@ -50,10 +50,18 @@ No additional tasks — US1's CI workflow already provides the check. Branch pro
 
 ---
 
-## Phase 5: Polish
+## Phase 5: Dependency Management & Build
 
-- [x] T005 Verify CI workflow runs locally with `act` or by pushing a test branch (manual validation)
-- [x] T006 Update `README.md` with CI badge (`![CI](https://github.com/.../.../actions/workflows/ci.yml/badge.svg)`)
+- [x] T005 Create Dependabot config in `.github/dependabot.yml` — weekly updates for gomod and github-actions ecosystems
+- [x] T006 Add version injection ldflags to `Makefile` build target — Version, Revision, Branch, BuildDate via `git describe` and `git rev-parse`, matching GoReleaser ldflags
+- [x] T007 Add `dist/` to `.gitignore` (GoReleaser output directory)
+
+---
+
+## Phase 6: Polish
+
+- [x] T008 Verify CI workflow runs by pushing a test branch (manual validation)
+- [x] T009 Update `README.md` with CI badge
 
 ---
 
@@ -62,7 +70,9 @@ No additional tasks — US1's CI workflow already provides the check. Branch pro
 - **T001**: No dependencies
 - **T002**: Depends on T001
 - **T003, T004**: Can run in parallel, both depend on T001
-- **T005, T006**: Depend on T002-T004
+- **T005**: Independent (Dependabot config)
+- **T006, T007**: Independent (build improvements)
+- **T008, T009**: Depend on T002-T004
 
 ## Implementation Strategy
 
@@ -74,4 +84,5 @@ No additional tasks — US1's CI workflow already provides the check. Branch pro
 ### Full Feature
 
 3. T003 + T004 → Release workflow
-4. T005 + T006 → Polish
+4. T005 + T006 + T007 → Dependency management and build
+5. T008 + T009 → Polish

@@ -38,13 +38,18 @@ All gates pass.
 ```text
 .
 ├── .github/
+│   ├── dependabot.yml          # Weekly Go module + Actions updates
 │   └── workflows/
 │       ├── ci.yml              # Test + vet on PR and main push
 │       └── release.yml         # GoReleaser on semver tag push
 └── .goreleaser.yml             # GoReleaser configuration
 ```
 
-No existing files modified (except CLAUDE.md plan pointer).
+### Modified Files
+
+- `Makefile` — added ldflags for version injection in local builds
+- `README.md` — added CI badge
+- `.gitignore` — added `dist/` (GoReleaser output)
 
 ## CI Workflow Design
 

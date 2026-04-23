@@ -48,7 +48,7 @@ A maintainer tags a version on main. GitHub Actions automatically builds release
 
 **Acceptance Scenarios**:
 
-1. **Given** a maintainer pushes a semver tag (e.g., `v0.1.0`), **When** the release workflow runs, **Then** binaries are built for at least Linux amd64 and arm64 and published as a GitHub Release.
+1. **Given** a maintainer pushes a semver tag (e.g., `v0.1.0`), **When** the release workflow runs, **Then** binaries are built for Linux, macOS, and Windows (amd64 + arm64 each) and published as a GitHub Release.
 2. **Given** a release is published, **When** a user downloads a binary, **Then** a SHA256 checksum file is available to verify the download.
 3. **Given** a tag is pushed that is NOT a semver tag, **When** GitHub Actions evaluates, **Then** the release workflow does NOT run.
 

@@ -1,16 +1,13 @@
 package testutil
 
 import (
-	"fmt"
 	"net"
-	"strings"
 	"sync/atomic"
 
 	"github.com/miekg/dns"
 )
 
-// serialCounter provides monotonically increasing SOA serials
-// so that CoreDNS's file plugin always accepts zone reloads.
+// serialCounter provides unique SOA serials across tests.
 var serialCounter atomic.Uint32
 
 func init() {
@@ -51,12 +48,8 @@ func Minttl(n uint32) SOAOption {
 
 // SOA creates a dns.SOA record with sensible defaults.
 // Only specify the options that matter for your test.
-//
-// IMPORTANT: The serial is auto-incremented by default so that
-// CoreDNS's file plugin always accepts zone reloads (it compares
-// serials). Use Serial(n) to set a specific value — but be aware
-// that the ZoneFile wrapper will inject a higher "reload serial"
-// into a separate SOA if needed to force CoreDNS to reload.
+// The serial auto-increments by default. Use Serial(n) to set
+// a specific value.
 func SOA(zone string, opts ...SOAOption) dns.RR {
 	zone = dns.Fqdn(zone)
 	soa := &dns.SOA{
@@ -106,15 +99,3 @@ func A(name, ip string) dns.RR {
 	}
 }
 
-// ZoneFile serializes DNS records into zone file text suitable for
-// CoreDNS's file plugin. The zone parameter sets the $ORIGIN.
-func ZoneFile(zone string, records ...dns.RR) string {
-	zone = dns.Fqdn(zone)
-	var b strings.Builder
-	fmt.Fprintf(&b, "$ORIGIN %s\n", zone)
-	for _, rr := range records {
-		b.WriteString(rr.String())
-		b.WriteByte('\n')
-	}
-	return b.String()
-}

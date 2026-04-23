@@ -6,12 +6,13 @@ at specs/001-e2e-bootstrap/plan.md
 
 ## Testing
 
-Integration tests use Docker Compose + CoreDNS fixtures. All test
-helpers live in `testutil/`:
+Integration tests use in-process `miekg/dns` servers. No Docker needed.
+Run with `go test -tags=integration ./...`. All test helpers live in
+`testutil/`:
 
-- `testutil/fixture.go` — `NewDNSFixture(t)`, `WriteZone()`, `Reload(t)`, `Probe()`
-- `testutil/records.go` — `SOA()`, `NS()`, `A()`, `ZoneFile()` (thin wrappers over `miekg/dns`)
-- `testutil/assertions.go` — `AssertGauge()`, `WithLabels()`, `WithValue()`
+- `testutil/fixture.go` — `NewDNSFixture(t)`, `Server()`, `ReferralServer()`, `ServerWithOptions()`, `Start(t)`, `Stop()`, `Probe()`
+- `testutil/records.go` — `SOA()`, `NS()`, `A()` (thin wrappers over `miekg/dns` with defaults-with-override)
+- `testutil/assertions.go` — `AssertGauge()`, `AssertGaugeExists()`, `AssertGaugeMissing()`, `AssertGaugeInRange()`, `WithLabels()`, `WithValue()`
 
 Read `.specify/memory/constitution.md` Principle VIII for the testing
 philosophy. Read `specs/001-e2e-bootstrap/research.md` "Testing Approach"

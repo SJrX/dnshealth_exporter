@@ -1,5 +1,7 @@
 # dnshealth_exporter
 
+[![CI](https://github.com/sjr/dnshealth_exporter/actions/workflows/ci.yml/badge.svg)](https://github.com/sjr/dnshealth_exporter/actions/workflows/ci.yml)
+
 A Prometheus exporter for DNS zone health monitoring, inspired by [intodns.com](https://intodns.com).
 
 Monitors DNS zones and exposes granular metrics for building Grafana dashboards that detect delegation, nameserver, SOA, MX, and other DNS health problems.

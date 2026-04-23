@@ -74,6 +74,9 @@ A maintainer tags a version on main. GitHub Actions automatically builds release
 - **FR-009**: The release workflow MUST build binaries for Linux (amd64, arm64), macOS (amd64, arm64), and Windows (amd64, arm64) using GoReleaser.
 - **FR-010**: The release workflow MUST publish binaries, checksums, and a changelog as a GitHub Release.
 - **FR-011**: The release workflow MUST NOT publish if tests fail.
+- **FR-012**: Dependabot MUST be configured to automatically create PRs for Go module and GitHub Actions dependency updates on a weekly schedule.
+- **FR-013**: Release binaries MUST have version, revision, branch, and build date injected at build time. The same version metadata MUST be available via `--version` flag and `dnshealth_build_info` metric.
+- **FR-014**: Local builds via `make build` MUST inject the same version metadata as release builds.
 
 ## Success Criteria *(mandatory)*
 

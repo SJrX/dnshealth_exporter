@@ -1,7 +1,6 @@
-.PHONY: build test test-integration vet fmt docker-up docker-down clean
+.PHONY: build test test-integration vet fmt clean
 
 BINARY := dnshealth_exporter
-DOCKER_COMPOSE := docker compose -f testdata/docker-compose.yml
 
 build:
 	go build -o $(BINARY) .
@@ -18,14 +17,5 @@ vet:
 fmt:
 	gofmt -s -w .
 
-docker-up:
-	$(DOCKER_COMPOSE) up -d
-	@echo "Waiting for CoreDNS containers to be ready..."
-	@sleep 2
-
-docker-down:
-	$(DOCKER_COMPOSE) down
-
 clean:
 	rm -f $(BINARY)
-	rm -f testdata/coredns/runtime/*/zones/*.zone

@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/miekg/dns"
@@ -69,21 +68,3 @@ func TestA_CreatesValidRecord(t *testing.T) {
 	}
 }
 
-func TestZoneFile_SerializesRecords(t *testing.T) {
-	// Exercise SUT
-	content := ZoneFile("example.test",
-		SOA("example.test", Serial(1)),
-		NS("example.test", "ns1.example.test"),
-	)
-
-	// Verification
-	if !strings.Contains(content, "$ORIGIN example.test.") {
-		t.Error("expected $ORIGIN line")
-	}
-	if !strings.Contains(content, "SOA") {
-		t.Error("expected SOA record")
-	}
-	if !strings.Contains(content, "ns1.example.test.") {
-		t.Error("expected NS record")
-	}
-}

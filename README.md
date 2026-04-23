@@ -16,7 +16,6 @@ Monitors DNS zones and exposes granular metrics for building Grafana dashboards 
 ### Prerequisites
 
 - Go 1.26+
-- Docker and Docker Compose (for integration tests)
 
 ### Build
 
@@ -44,18 +43,16 @@ Visit http://localhost:9199/metrics to see output.
 
 ### Test
 
-Unit tests (no Docker needed):
+Unit tests:
 
 ```bash
 go test ./...
 ```
 
-Integration tests (requires Docker):
+Integration tests (no Docker needed — uses in-process DNS servers):
 
 ```bash
-make docker-up
-make test-integration
-make docker-down
+go test -tags=integration ./...
 ```
 
 ## Status

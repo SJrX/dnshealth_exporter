@@ -1,7 +1,0 @@
-example.test {
-    bind 127.240.0.3
-    file /runtime/zones/example.test.zone
-    reload 2s
-    log
-    errors
-}

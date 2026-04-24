@@ -16,6 +16,8 @@ type ProbeResult struct {
 	IP string
 	// Success indicates whether the query succeeded.
 	Success bool
+	// TimedOut indicates the query failed due to a timeout.
+	TimedOut bool
 	// Duration of the DNS query.
 	Duration time.Duration
 	// Metrics holds check-specific metric values.

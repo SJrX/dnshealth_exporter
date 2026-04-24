@@ -124,6 +124,9 @@ func main() {
 			return
 		}
 		currentConfig.Store(newCfg)
+		if len(newCfg.AddressOverrides) > 0 {
+			prober.ResolveAddress = newCfg.ResolveAddress
+		}
 		delegationCache.Invalidate()
 		logger.Info("Configuration reloaded", "zones", len(newCfg.Zones))
 		fmt.Fprintln(w, "OK")
@@ -155,6 +158,9 @@ func main() {
 				continue
 			}
 			currentConfig.Store(newCfg)
+			if len(newCfg.AddressOverrides) > 0 {
+				prober.ResolveAddress = newCfg.ResolveAddress
+			}
 			delegationCache.Invalidate()
 			logger.Info("Configuration reloaded via SIGHUP", "zones", len(newCfg.Zones))
 		}

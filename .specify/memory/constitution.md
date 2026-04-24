@@ -230,5 +230,10 @@ the test it is important that it is NOT in the test.
 - Compliance with these principles MUST be verified during
   specification review (via the Constitution Check gate in
   plan.md) and during code review.
+- After implementation, a thorough code audit against the spec
+  MUST be performed before declaring the feature complete. This
+  audit checks actual code behavior against every FR, verifies
+  documentation accuracy, and identifies dead code, stale
+  references, and semantic errors in metrics or counters.
 
 **Version**: 1.1.1 | **Ratified**: 2026-04-21 | **Last Amended**: 2026-04-21

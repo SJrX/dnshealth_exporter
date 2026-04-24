@@ -122,7 +122,7 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 			}
 			r.DNSQueries.WithLabelValues(res.IP).Inc()
 			r.DNSDuration.WithLabelValues(res.IP).Add(res.Duration.Seconds())
-			if !res.Success {
+			if res.TimedOut {
 				r.DNSTimeouts.WithLabelValues(res.IP).Inc()
 			}
 		}

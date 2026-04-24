@@ -2,10 +2,22 @@ package prober
 
 import (
 	"context"
+	"net"
 	"time"
 
 	"github.com/miekg/dns"
 )
+
+// IsTimeout returns true if the error is a network timeout.
+func IsTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	if netErr, ok := err.(net.Error); ok {
+		return netErr.Timeout()
+	}
+	return false
+}
 
 // ExchangeWithRetry performs a DNS exchange with one retry on
 // transient failure (timeout, network error). Non-transient

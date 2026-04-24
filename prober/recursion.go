@@ -40,6 +40,7 @@ func probeRecursionForNS(ctx context.Context, zone string, ns Nameserver, client
 	result.Duration = time.Since(start)
 
 	if err != nil {
+		result.TimedOut = IsTimeout(err)
 		logger.Warn("recursion query failed", "zone", zone, "nameserver", ns.Hostname, "ip", ns.IP, "err", err)
 		return result
 	}

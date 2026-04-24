@@ -1,104 +1,108 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Production Probe Loop
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
-
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+**Branch**: `003-production-probe-loop` | **Date**: 2026-04-23 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `specs/003-production-probe-loop/spec.md`
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+Refactor the exporter from probe-once-at-startup to a production
+architecture: background probe loop with scatter-gather, delegation
+caching, config reload, per-query retries, and parallel zone probing.
+Probers are refactored to return structured result data instead of
+writing directly to a Prometheus registry.
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
-
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Go 1.26.x
+**Key Changes**: New packages `cycle/` and `cache/`, refactored `prober/`
+**Concurrency**: `sync.RWMutex` for cache, `sync.WaitGroup` for scatter-gather, `atomic.Pointer` for registry swap
+**Config**: New fields (probe_interval, delegation_cache_ttl, query_timeout, zone_deadline)
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
-
-[Gates determined based on constitution file]
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Robust Integration Testing | PASS | FR-014 mandates test coverage for all new behavior. |
+| II. Prometheus Naming Conventions | PASS | New operational metrics follow `dnshealth_` prefix convention. Counters use `_total` suffix. |
+| III. Modern Go Ecosystem | PASS | Go 1.26.x, standard concurrency primitives. |
+| IV. Structured Logging | PASS | Cycle events logged via promslog. |
+| V. Zone-Focused Detection Scope | PASS | No change to detection model. |
+| VI. Prometheus Ecosystem Conventions | PASS | Two-registry pattern follows Prometheus patterns. Config reload via SIGHUP follows blackbox_exporter. |
+| VII. Well-Behaved Binary | PASS | SIGHUP reload, graceful shutdown drains in-flight cycle. |
+| VIII. Readable, Honest Tests | PASS | Tests use testutil fixtures. |
+| Dev Workflow | PASS | README updated per constitution requirement. |
 
 ## Project Structure
 
-### Documentation (this feature)
+### New/Modified Files
 
 ```text
-specs/[###-feature]/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+.
+├── main.go                      # MODIFIED: probe loop, config reload, 503 handler
+├── config/
+│   └── config.go                # MODIFIED: new fields (intervals, timeouts)
+├── cycle/
+│   ├── runner.go                # NEW: probe cycle runner (scatter-gather)
+│   └── runner_test.go           # NEW: cycle runner integration tests
+├── cache/
+│   ├── delegation.go            # NEW: delegation cache with TTL
+│   └── delegation_test.go       # NEW: cache tests
+├── prober/
+│   ├── prober.go                # MODIFIED: ProbeFn returns []ProbeResult
+│   ├── result.go                # NEW: ProbeResult type definition
+│   ├── registry.go              # NEW: build registry from []ProbeResult
+│   ├── soa.go                   # MODIFIED: return results, don't write registry
+│   ├── recursion.go             # MODIFIED: same
+│   ├── glue.go                  # MODIFIED: same
+│   └── *_test.go                # MODIFIED: test against new return types
+├── testutil/
+│   ├── fixture.go               # MODIFIED: add cycle-level test helpers
+│   └── assertions.go            # POSSIBLY MODIFIED: if new assertion patterns needed
+└── README.md                    # MODIFIED: document new config options
 ```
 
-### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
+## Key Architecture Decisions
 
-```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+### Scatter-Gather Pattern
 
-tests/
-├── contract/
-├── integration/
-└── unit/
+Each probe cycle:
+1. Fan out one goroutine per zone
+2. Each zone goroutine: check delegation cache → scatter individual DNS queries → gather ProbeResults
+3. Collect all ProbeResults from all zones
+4. Build a new `prometheus.Registry` from results
+5. Atomic swap via `atomic.Pointer[CycleState]`
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
+### Two Registries
 
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
+- **Permanent**: `build_info`, operational counters (`_total` suffixed)
+- **Cycle**: All check metrics, rebuilt each cycle
 
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
+`/metrics` handler gathers from both. Before first cycle: 503.
 
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
-```
+### Prober Refactor
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+Current: `ProbeFn(ctx, zone, client, registry, logger) error`
+New: `ProbeFn(ctx, zone, client, logger) ([]ProbeResult, error)`
+
+Probers return data. Registry is built centrally. This is the
+biggest code change — every prober file and test needs updating.
+
+### Delegation Cache
+
+- `sync.RWMutex`-guarded map
+- Key: zone FQDN
+- Value: DelegationResult + timestamp
+- TTL: configurable (default 30m)
+- Invalidated on config reload
+- Cache misses trigger delegation walk (acquires write lock)
+
+### Config Reload
+
+- SIGHUP handler + `/-/reload` POST endpoint
+- Read → validate → swap config atomically
+- Invalidate delegation cache on successful reload
+- Current probe cycle finishes first, next cycle uses new config
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
-
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+No Constitution Check violations. Table not needed.

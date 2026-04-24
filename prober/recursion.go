@@ -2,7 +2,6 @@ package prober
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -15,12 +14,7 @@ func init() {
 
 // ProbeRecursion queries each nameserver with the RD flag set and
 // checks if the RA flag is returned.
-func ProbeRecursion(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
-	nameservers, err := DiscoverNameservers(ctx, zone, client, logger)
-	if err != nil {
-		return nil, fmt.Errorf("recursion: discovering nameservers: %w", err)
-	}
-
+func ProbeRecursion(ctx context.Context, zone string, nameservers []Nameserver, delegation *DelegationResult, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
 	var results []ProbeResult
 	for _, ns := range nameservers {
 		result := probeRecursionForNS(ctx, zone, ns, client, logger)

@@ -105,14 +105,36 @@ func (f *DNSFixture) Stop() {
 }
 
 // Probe calls a prober function against a zone, builds a registry
-// from the results, and returns it.
+// from the results, and returns it. Performs delegation walk and
+// nameserver discovery automatically (like the cycle runner does).
 func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry {
 	f.t.Helper()
 	client := &mdns.Client{Timeout: 1 * time.Second}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := context.Background()
 
-	results, err := fn(ctx, zone, client, logger)
+	// Walk delegation and discover nameservers (same as cycle runner)
+	delegation, err := prober.WalkDelegation(ctx, zone, client, logger)
+	if err != nil {
+		f.t.Logf("Delegation walk error: %v", err)
+		return prometheus.NewRegistry()
+	}
+
+	var nameservers []prober.Nameserver
+	for _, ns := range delegation.NSRecords {
+		if ns.IP != "" {
+			nameservers = append(nameservers, ns)
+			continue
+		}
+		ip, err := prober.ResolveHostname(ctx, ns.Hostname, client, logger)
+		if err != nil {
+			f.t.Logf("Resolve hostname error: %v", err)
+			continue
+		}
+		nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+	}
+
+	results, err := fn(ctx, zone, nameservers, delegation, client, logger)
 	if err != nil {
 		f.t.Logf("Probe returned error: %v", err)
 	}

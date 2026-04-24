@@ -15,26 +15,7 @@ func init() {
 // ProbeGlue walks the delegation chain to get the parent's view,
 // then queries each authoritative NS for its own view. Returns
 // results with source labels for parent vs self comparison.
-func ProbeGlue(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
-	delegation, err := WalkDelegation(ctx, zone, client, logger)
-	if err != nil {
-		return nil, fmt.Errorf("glue: %w", err)
-	}
-
-	// Resolve missing IPs for nameservers without glue
-	for i, ns := range delegation.NSRecords {
-		if ns.IP != "" {
-			continue
-		}
-		ip, err := ResolveHostname(ctx, ns.Hostname, client, logger)
-		if err != nil {
-			logger.Warn("glue: could not resolve NS without glue",
-				"zone", zone, "nameserver", ns.Hostname, "err", err)
-			continue
-		}
-		delegation.NSRecords[i].IP = ip
-	}
-
+func ProbeGlue(ctx context.Context, zone string, nameservers []Nameserver, delegation *DelegationResult, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
 	var results []ProbeResult
 
 	// Parent's NS records

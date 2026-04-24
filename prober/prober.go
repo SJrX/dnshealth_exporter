@@ -29,8 +29,10 @@ var ResolveAddress = func(ip string) string {
 }
 
 // ProbeFn is the signature for all DNS health check probers.
-// Probers return structured results instead of writing to a registry.
-type ProbeFn func(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error)
+// Probers receive pre-discovered nameservers and the delegation
+// result so the delegation walk happens once per zone per cycle,
+// not once per prober.
+type ProbeFn func(ctx context.Context, zone string, nameservers []Nameserver, delegation *DelegationResult, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error)
 
 // Probers maps check names to their prober functions.
 var Probers = map[string]ProbeFn{}

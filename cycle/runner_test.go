@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"log/slog"
+
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sjr/dnshealth_exporter/cache"
 	"github.com/sjr/dnshealth_exporter/config"
 	"github.com/sjr/dnshealth_exporter/cycle"
 	"github.com/sjr/dnshealth_exporter/prober"
 	. "github.com/sjr/dnshealth_exporter/testutil"
-
-	"log/slog"
 )
 
 const CycleTestPort = "10054"
@@ -308,5 +309,139 @@ func TestCycleRunner_SlowZoneDoesNotBlockOthers(t *testing.T) {
 		WithLabels("zone", "alpha.test"), WithValue(999))
 	if elapsed > 5*time.Second {
 		t.Errorf("cycle took %v — slow zone blocked others", elapsed)
+	}
+}
+
+func TestCycleRunner_RetrySucceedsOnSecondAttempt(t *testing.T) {
+	// Fixture Setup — ns1 drops the first query but responds to retry
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		ServerWithOptions("127.240.0.2:"+CycleTestPort, ServerOptions{DropFirstN: 1},
+			SOA("example.test", Serial(777)),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	runner := &cycle.Runner{
+		Cache:  cache.NewDelegationCache(30 * time.Minute),
+		Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	}
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 1 * time.Second,
+		ZoneDeadline: 10 * time.Second,
+	}
+
+	// Exercise SUT
+	result := runner.Run(context.Background(), cfg)
+	registry := prober.BuildRegistry(result.Results)
+
+	// Verification — retry succeeded, SOA metric present
+	AssertGaugeExists(t, registry, "dnshealth_soa_serial",
+		WithLabels("zone", "example.test"))
+
+	// The server received at least 2 queries (original + retry)
+	if count := env.QueryCount("127.240.0.2:" + CycleTestPort); count < 2 {
+		t.Errorf("expected at least 2 queries to ns1, got %d", count)
+	}
+}
+
+func TestCycleRunner_RetryOnSERVFAIL(t *testing.T) {
+	// Fixture Setup — ns1 returns SERVFAIL (rcode 2)
+	// ExchangeWithRetry only retries on transport errors, not rcodes.
+	// SERVFAIL is a valid DNS response, so no retry — but the prober
+	// should still report Success=false.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		ServerWithOptions("127.240.0.2:"+CycleTestPort, ServerOptions{Rcode: 2}, // SERVFAIL
+			SOA("example.test"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	runner := &cycle.Runner{
+		Cache:  cache.NewDelegationCache(30 * time.Minute),
+		Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	}
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 2 * time.Second,
+		ZoneDeadline: 10 * time.Second,
+	}
+
+	// Exercise SUT
+	result := runner.Run(context.Background(), cfg)
+	registry := prober.BuildRegistry(result.Results)
+
+	// Verification — query_success=0 for this NS (SERVFAIL means no usable data)
+	AssertGauge(t, registry, "dnshealth_query_success",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2", "check", "soa"),
+		WithValue(0))
+}
+
+func TestCycleRunner_OperationalCountersIncrement(t *testing.T) {
+	// Fixture Setup
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+CycleTestPort,
+			SOA("example.test", Serial(1)),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 5 * time.Second,
+		ZoneDeadline: 30 * time.Second,
+	}
+
+	// Exercise SUT
+	runner.Run(context.Background(), cfg)
+
+	// Verification — operational metrics on permanent registry
+	AssertGaugeExists(t, permRegistry, "dnshealth_probe_cycle_duration_seconds")
+	AssertGauge(t, permRegistry, "dnshealth_probe_zones_total", WithValue(1))
+
+	// Per-server counters should have been incremented
+	// (counters are gathered as gauges by the test helper)
+	families, _ := permRegistry.Gather()
+	foundQueries := false
+	for _, f := range families {
+		if f.GetName() == "dnshealth_dns_queries_total" {
+			foundQueries = true
+			if len(f.GetMetric()) == 0 {
+				t.Error("dnshealth_dns_queries_total has no metrics")
+			}
+			for _, m := range f.GetMetric() {
+				if m.GetCounter().GetValue() < 1 {
+					t.Errorf("expected at least 1 query, got %v", m.GetCounter().GetValue())
+				}
+			}
+		}
+	}
+	if !foundQueries {
+		t.Error("dnshealth_dns_queries_total not found on permanent registry")
 	}
 }

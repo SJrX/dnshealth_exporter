@@ -21,6 +21,9 @@ type Runner struct {
 	// Operational metrics on the permanent registry.
 	CycleDuration prometheus.Gauge
 	ZonesProbed   prometheus.Gauge
+	DNSQueries    *prometheus.CounterVec
+	DNSDuration   *prometheus.CounterVec
+	DNSTimeouts   *prometheus.CounterVec
 }
 
 // NewRunner creates a Runner and registers operational metrics on
@@ -34,13 +37,28 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		Name: "dnshealth_probe_zones_total",
 		Help: "Number of zones probed in the last cycle.",
 	})
-	reg.MustRegister(cycleDuration, zonesProbed)
+	dnsQueries := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "dnshealth_dns_queries_total",
+		Help: "Total DNS queries per server.",
+	}, []string{"server"})
+	dnsDuration := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "dnshealth_dns_query_duration_seconds_total",
+		Help: "Total DNS query time per server in seconds.",
+	}, []string{"server"})
+	dnsTimeouts := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "dnshealth_dns_timeouts_total",
+		Help: "Total DNS query timeouts per server.",
+	}, []string{"server"})
+	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts)
 
 	return &Runner{
 		Cache:         c,
 		Logger:        logger,
 		CycleDuration: cycleDuration,
 		ZonesProbed:   zonesProbed,
+		DNSQueries:    dnsQueries,
+		DNSDuration:   dnsDuration,
+		DNSTimeouts:   dnsTimeouts,
 	}
 }
 
@@ -96,6 +114,19 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 	if r.ZonesProbed != nil {
 		r.ZonesProbed.Set(float64(result.ZoneCount))
 	}
+	// Per-server counters derived from results
+	if r.DNSQueries != nil {
+		for _, res := range allResults {
+			if res.IP == "" {
+				continue
+			}
+			r.DNSQueries.WithLabelValues(res.IP).Inc()
+			r.DNSDuration.WithLabelValues(res.IP).Add(res.Duration.Seconds())
+			if !res.Success {
+				r.DNSTimeouts.WithLabelValues(res.IP).Inc()
+			}
+		}
+	}
 
 	return result
 }
@@ -105,11 +136,20 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config) []prober.ProbeResult {
 	client := &dns.Client{Timeout: cfg.QueryTimeout}
 
-	// Delegation walk — once per zone per cycle
-	delegation, err := prober.WalkDelegation(ctx, zone, client, r.Logger)
-	if err != nil {
-		r.Logger.Warn("delegation walk failed", "zone", zone, "err", err)
-		return nil
+	// Delegation walk — check cache first, walk on miss
+	var delegation *prober.DelegationResult
+	if cached := r.Cache.Get(zone); cached != nil {
+		delegation = cached.(*prober.DelegationResult)
+		r.Logger.Debug("delegation cache hit", "zone", zone)
+	} else {
+		var err error
+		delegation, err = prober.WalkDelegation(ctx, zone, client, r.Logger)
+		if err != nil {
+			r.Logger.Warn("delegation walk failed", "zone", zone, "err", err)
+			return nil
+		}
+		r.Cache.Set(zone, delegation)
+		r.Logger.Debug("delegation cache miss, stored", "zone", zone)
 	}
 
 	// Discover nameservers — resolve missing IPs (no-glue case)

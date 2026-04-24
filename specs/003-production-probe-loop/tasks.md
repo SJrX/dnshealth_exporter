@@ -75,10 +75,10 @@
 
 ### Tests for US2
 
-- [ ] T023 [US2] Integration test: reload adds new zone in `main_test.go` — start exporter with zone A, write new config with zones A+B, trigger reload, verify zone B metrics appear
-- [ ] T024 [US2] Integration test: reload removes zone in `main_test.go` — start with A+B, reload with only A, verify B metrics absent
-- [ ] T025 [US2] Integration test: invalid reload keeps old config in `main_test.go` — start with A, write invalid config, trigger reload, verify A still probed, error logged
-- [ ] T026 [US2] Integration test: reload invalidates delegation cache in `cache/delegation_test.go` — populate cache, call Invalidate, verify next access is a cache miss
+- [x] T023 [US2] Integration test: reload adds new zone in `main_test.go` — start exporter with zone A, write new config with zones A+B, trigger reload, verify zone B metrics appear
+- [x] T024 [US2] Integration test: reload removes zone in `main_test.go` — start with A+B, reload with only A, verify B metrics absent
+- [x] T025 [US2] Integration test: invalid reload keeps old config in `main_test.go` — start with A, write invalid config, trigger reload, verify A still probed, error logged
+- [x] T026 [US2] Integration test: reload invalidates delegation cache in `cache/delegation_test.go` — populate cache, call Invalidate, verify next access is a cache miss
 
 ### Implementation for US2
 
@@ -122,7 +122,7 @@
 - [x] T041 Update `dnshealth.yml` example config — add commented-out examples of new fields with defaults
 - [x] T042 Run `go vet ./...` and `gofmt -s -w .`
 - [x] T043 Verify all integration tests pass: `go test -tags=integration -count=1 -v ./...`
-- [ ] T044 Manual validation: run exporter with real domains, verify metrics refresh every interval, test SIGHUP reload
+- [x] T044 Manual validation: run exporter with real domains, verify metrics refresh every interval, test SIGHUP reload
 
 ---
 

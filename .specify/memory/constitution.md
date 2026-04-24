@@ -213,6 +213,9 @@ the test it is important that it is NOT in the test.
 - The exporter MUST build and start cleanly with `go build` and
   expose metrics on the default `/metrics` endpoint without
   additional setup beyond configuration.
+- README.md MUST be updated when a feature changes user-facing
+  behavior, configuration options, build instructions, or
+  prerequisites.
 
 ## Governance
 

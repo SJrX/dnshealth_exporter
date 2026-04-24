@@ -33,8 +33,8 @@
 - [x] T007 [P] Refactor `prober/glue.go` — `ProbeGlue` returns `[]ProbeResult` with source label in Labels map. Remove `newGauge` calls.
 - [x] T008 Create `prober/registry.go` — `BuildRegistry(results []ProbeResult) *prometheus.Registry` function that creates a registry and registers all metrics from ProbeResult data. This centralizes metric creation.
 - [x] T009 Refactor all prober integration tests (`prober/soa_test.go`, `prober/recursion_test.go`, `prober/glue_test.go`) — update to call probers with new signature, use `BuildRegistry` to create registry from results, then assert with existing `testutil` helpers. All 18 existing tests must pass.
-- [ ] T010 Add config fields to `config/config.go` — `ProbeInterval` (duration, default 60s), `DelegationCacheTTL` (duration, default 30m), `QueryTimeout` (duration, default 5s), `ZoneDeadline` (duration, default 30s)
-- [ ] T011 Add unit tests for new config fields in `config/config_test.go` — test parsing with all new fields, test defaults when omitted
+- [x] T010 Add config fields to `config/config.go` — `ProbeInterval` (duration, default 60s), `DelegationCacheTTL` (duration, default 30m), `QueryTimeout` (duration, default 5s), `ZoneDeadline` (duration, default 30s)
+- [x] T011 Add unit tests for new config fields in `config/config_test.go` — test parsing with all new fields, test defaults when omitted
 
 **Checkpoint**: All probers return `[]ProbeResult`, `BuildRegistry` works, all 18 existing integration tests pass with new architecture. No behavioral change yet — just refactored internals.
 
@@ -56,12 +56,12 @@
 
 ### Implementation for US1
 
-- [ ] T017 [US1] Implement cycle runner in `cycle/runner.go` — fan out goroutine per zone, each zone: get delegation (from cache or walk), scatter DNS queries per NS per check, gather `[]ProbeResult`, collect all results, return
-- [ ] T018 [US1] Implement per-query timeout and per-zone deadline in `cycle/runner.go` — each DNS query gets `QueryTimeout` context, each zone goroutine gets `ZoneDeadline` context, cancel outstanding queries when deadline expires
-- [ ] T019 [US1] Implement atomic metric swap in `main.go` — `atomic.Pointer[CycleState]` holds current cycle registry, background goroutine runs cycle on ticker, swaps CycleState on completion, `/metrics` handler gathers from permanent + cycle registries
-- [ ] T020 [US1] Implement 503 before first cycle in `main.go` — `/metrics` handler checks if CycleState is nil, returns 503 if so
-- [ ] T021 [US1] Implement cycle overlap prevention in `main.go` — if previous cycle still running when ticker fires, skip and log warning
-- [ ] T022 [US1] Wire delegation cache into cycle runner — `WalkDelegation` checks cache first, populates cache on miss, uses `DelegationCacheTTL` from config
+- [x] T017 [US1] Implement cycle runner in `cycle/runner.go` — fan out goroutine per zone, each zone: get delegation (from cache or walk), scatter DNS queries per NS per check, gather `[]ProbeResult`, collect all results, return
+- [x] T018 [US1] Implement per-query timeout and per-zone deadline in `cycle/runner.go` — each DNS query gets `QueryTimeout` context, each zone goroutine gets `ZoneDeadline` context, cancel outstanding queries when deadline expires
+- [x] T019 [US1] Implement atomic metric swap in `main.go` — `atomic.Pointer[CycleState]` holds current cycle registry, background goroutine runs cycle on ticker, swaps CycleState on completion, `/metrics` handler gathers from permanent + cycle registries
+- [x] T020 [US1] Implement 503 before first cycle in `main.go` — `/metrics` handler checks if CycleState is nil, returns 503 if so
+- [x] T021 [US1] Implement cycle overlap prevention in `main.go` — if previous cycle still running when ticker fires, skip and log warning
+- [x] T022 [US1] Wire delegation cache into cycle runner — `WalkDelegation` checks cache first, populates cache on miss, uses `DelegationCacheTTL` from config
 
 **Checkpoint**: Exporter runs probe cycles on a timer, `/metrics` serves fresh results, stale NS removed naturally, 503 before first cycle.
 
@@ -82,9 +82,9 @@
 
 ### Implementation for US2
 
-- [ ] T027 [US2] Implement SIGHUP handler in `main.go` — on SIGHUP: read config file, validate, if valid: swap config atomically + invalidate delegation cache, if invalid: log error
-- [ ] T028 [US2] Implement `/-/reload` POST handler in `main.go` — same logic as SIGHUP, return 200 on success, 500 on failure with error message
-- [ ] T029 [US2] Ensure probe cycle reads config atomically in `main.go` — cycle runner receives config snapshot at start of each cycle, not a pointer to mutable config
+- [x] T027 [US2] Implement SIGHUP handler in `main.go` — on SIGHUP: read config file, validate, if valid: swap config atomically + invalidate delegation cache, if invalid: log error
+- [x] T028 [US2] Implement `/-/reload` POST handler in `main.go` — same logic as SIGHUP, return 200 on success, 500 on failure with error message
+- [x] T029 [US2] Ensure probe cycle reads config atomically in `main.go` — cycle runner receives config snapshot at start of each cycle, not a pointer to mutable config
 
 **Checkpoint**: Config reload works via SIGHUP and HTTP. Invalid configs rejected gracefully. Cache invalidated on reload.
 

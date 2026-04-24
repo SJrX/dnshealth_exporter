@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promslog"
@@ -20,7 +20,9 @@ import (
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 
+	"github.com/sjr/dnshealth_exporter/cache"
 	"github.com/sjr/dnshealth_exporter/config"
+	"github.com/sjr/dnshealth_exporter/cycle"
 	"github.com/sjr/dnshealth_exporter/prober"
 )
 
@@ -38,7 +40,6 @@ func main() {
 	kingpin.Parse()
 
 	logger := promslog.New(promslogConfig)
-
 	logger.Info("Starting dnshealth_exporter", "version", version.Info())
 
 	cfg, err := config.Load(*configFile)
@@ -69,16 +70,65 @@ func main() {
 	buildInfo.Set(1)
 	permanentRegistry.MustRegister(buildInfo)
 
-	// Run initial probe (temporary — will be replaced by cycle runner)
-	cycleRegistry := runAllProbes(context.Background(), cfg, logger)
+	// Cycle state: atomic pointer to the current cycle's registry.
+	// nil before first cycle completes → /metrics returns 503.
+	var cycleRegistry atomic.Pointer[prometheus.Registry]
+
+	// Delegation cache
+	delegationCache := cache.NewDelegationCache(cfg.DelegationCacheTTL)
+
+	// Cycle runner
+	runner := &cycle.Runner{
+		Cache:  delegationCache,
+		Logger: logger,
+	}
+
+	// Atomic config pointer for reload support
+	var currentConfig atomic.Pointer[config.Config]
+	currentConfig.Store(cfg)
+
+	// Background probe loop
+	cycleRunning := make(chan struct{}, 1)
+	go func() {
+		// Run first cycle immediately
+		runCycle(runner, &currentConfig, &cycleRegistry, cycleRunning, logger)
+
+		ticker := time.NewTicker(cfg.ProbeInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			runCycle(runner, &currentConfig, &cycleRegistry, cycleRunning, logger)
+		}
+	}()
 
 	// Set up HTTP server
 	mux := http.NewServeMux()
-	// Gather from both permanent and cycle registries
-	gatherers := prometheus.Gatherers{permanentRegistry, cycleRegistry}
-	mux.Handle("/metrics", promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}))
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		reg := cycleRegistry.Load()
+		if reg == nil {
+			http.Error(w, "Probe cycle not yet complete", http.StatusServiceUnavailable)
+			return
+		}
+		gatherers := prometheus.Gatherers{permanentRegistry, reg}
+		promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}).ServeHTTP(w, r)
+	})
 	mux.HandleFunc("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "OK")
+	})
+	mux.HandleFunc("/-/reload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		newCfg, err := config.Load(*configFile)
+		if err != nil {
+			logger.Error("Config reload failed", "err", err)
+			http.Error(w, fmt.Sprintf("Reload failed: %v", err), http.StatusInternalServerError)
+			return
+		}
+		currentConfig.Store(newCfg)
+		delegationCache.Invalidate()
+		logger.Info("Configuration reloaded", "zones", len(newCfg.Zones))
 		fmt.Fprintln(w, "OK")
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -94,9 +144,24 @@ func main() {
 
 	server := &http.Server{Handler: mux}
 
-	// Signal handling
+	// Signal handling: SIGTERM/SIGINT for shutdown, SIGHUP for reload
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+
+	sighup := make(chan os.Signal, 1)
+	signal.Notify(sighup, syscall.SIGHUP)
+	go func() {
+		for range sighup {
+			newCfg, err := config.Load(*configFile)
+			if err != nil {
+				logger.Error("Config reload via SIGHUP failed", "err", err)
+				continue
+			}
+			currentConfig.Store(newCfg)
+			delegationCache.Invalidate()
+			logger.Info("Configuration reloaded via SIGHUP", "zones", len(newCfg.Zones))
+		}
+	}()
 
 	go func() {
 		logger.Info("Listening", "address", (*webConfig).WebListenAddresses)
@@ -118,19 +183,26 @@ func main() {
 	logger.Info("Shutdown complete")
 }
 
-func runAllProbes(ctx context.Context, cfg *config.Config, logger *slog.Logger) *prometheus.Registry {
-	client := &dns.Client{Timeout: 5 * time.Second}
-	var allResults []prober.ProbeResult
-	for _, zone := range cfg.Zones {
-		for name, fn := range prober.Probers {
-			logger.Debug("Running probe", "check", name, "zone", zone)
-			results, err := fn(ctx, zone, client, logger)
-			if err != nil {
-				logger.Warn("probe failed", "check", name, "zone", zone, "err", err)
-				continue
-			}
-			allResults = append(allResults, results...)
-		}
+func runCycle(runner *cycle.Runner, cfgPtr *atomic.Pointer[config.Config], registryPtr *atomic.Pointer[prometheus.Registry], running chan struct{}, logger *slog.Logger) {
+	// Overlap prevention: skip if previous cycle still running
+	select {
+	case running <- struct{}{}:
+		// acquired
+	default:
+		logger.Warn("Skipping probe cycle — previous cycle still running")
+		return
 	}
-	return prober.BuildRegistry(allResults)
+	defer func() { <-running }()
+
+	cfg := cfgPtr.Load()
+	logger.Info("Starting probe cycle", "zones", len(cfg.Zones))
+
+	result := runner.Run(context.Background(), cfg)
+
+	registry := prober.BuildRegistry(result.Results)
+	registryPtr.Store(registry)
+
+	logger.Info("Probe cycle complete",
+		"duration", result.Duration,
+		"zones", result.ZoneCount)
 }

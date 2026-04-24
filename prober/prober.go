@@ -172,34 +172,6 @@ func extractDelegation(parentServer string, nsSection, extraSection []dns.RR, zo
 	return result
 }
 
-// DiscoverNameservers walks the delegation chain from root to find
-// the authoritative nameservers for a zone, then resolves their IPs.
-func DiscoverNameservers(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]Nameserver, error) {
-	delegation, err := WalkDelegation(ctx, zone, client, logger)
-	if err != nil {
-		return nil, fmt.Errorf("discovering nameservers: %w", err)
-	}
-
-	var servers []Nameserver
-	for _, ns := range delegation.NSRecords {
-		if ns.IP != "" {
-			servers = append(servers, ns)
-			continue
-		}
-		ip, err := ResolveHostname(ctx, ns.Hostname, client, logger)
-		if err != nil {
-			logger.Warn("could not resolve NS hostname", "ns", ns.Hostname, "err", err)
-			continue
-		}
-		servers = append(servers, Nameserver{Hostname: ns.Hostname, IP: ip})
-	}
-
-	if len(servers) == 0 {
-		return nil, fmt.Errorf("no nameservers found for zone %s", zone)
-	}
-	return servers, nil
-}
-
 // ResolveHostname resolves a DNS hostname to an IPv4 address by
 // walking the delegation chain from root.
 func ResolveHostname(ctx context.Context, hostname string, client *dns.Client, logger *slog.Logger) (string, error) {

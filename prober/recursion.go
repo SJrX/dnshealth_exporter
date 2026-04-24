@@ -4,68 +4,59 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/miekg/dns"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 func init() {
 	RegisterProber("recursion", ProbeRecursion)
 }
 
-// ProbeRecursion queries each nameserver with the RD (Recursion Desired)
-// flag set and checks if the RA (Recursion Available) flag is returned.
-// Authoritative-only nameservers should refuse recursion (RA=0).
-func ProbeRecursion(ctx context.Context, zone string, client *dns.Client, registry prometheus.Registerer, logger *slog.Logger) error {
-	nameservers, err := discoverNameservers(ctx, zone, client, logger)
+// ProbeRecursion queries each nameserver with the RD flag set and
+// checks if the RA flag is returned.
+func ProbeRecursion(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
+	nameservers, err := DiscoverNameservers(ctx, zone, client, logger)
 	if err != nil {
-		return fmt.Errorf("recursion: discovering nameservers: %w", err)
+		return nil, fmt.Errorf("recursion: discovering nameservers: %w", err)
 	}
 
+	var results []ProbeResult
 	for _, ns := range nameservers {
-		nsLabels := prometheus.Labels{
-			"zone":       zone,
-			"nameserver": ns.hostname,
-			"ip":         ns.ip,
-		}
-
-		if err := probeRecursionForNS(ctx, zone, ns, client, registry, logger); err != nil {
-			logger.Warn("recursion check failed for nameserver", "zone", zone, "nameserver", ns.hostname, "ip", ns.ip, "err", err)
-			newGauge(registry, "dnshealth_recursion_query_success",
-				"Whether the recursion query to this nameserver succeeded (1=success, 0=failure).",
-				nsLabels, 0)
-		} else {
-			newGauge(registry, "dnshealth_recursion_query_success",
-				"Whether the recursion query to this nameserver succeeded (1=success, 0=failure).",
-				nsLabels, 1)
-		}
+		result := probeRecursionForNS(ctx, zone, ns, client, logger)
+		results = append(results, result)
 	}
-	return nil
+	return results, nil
 }
 
-func probeRecursionForNS(ctx context.Context, zone string, ns nameserver, client *dns.Client, registry prometheus.Registerer, logger *slog.Logger) error {
+func probeRecursionForNS(ctx context.Context, zone string, ns Nameserver, client *dns.Client, logger *slog.Logger) ProbeResult {
+	result := ProbeResult{
+		Zone:       zone,
+		Check:      "recursion",
+		Nameserver: ns.Hostname,
+		IP:         ns.IP,
+	}
+
+	start := time.Now()
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeSOA)
 	msg.RecursionDesired = true
 
-	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.ip))
+	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.IP))
+	result.Duration = time.Since(start)
+
 	if err != nil {
-		return fmt.Errorf("querying %s: %w", ns.ip, err)
+		logger.Warn("recursion query failed", "zone", zone, "nameserver", ns.Hostname, "ip", ns.IP, "err", err)
+		return result
 	}
 
-	var value float64
+	result.Success = true
+	var raValue float64
 	if resp.RecursionAvailable {
-		value = 1
+		raValue = 1
 	}
-
-	labels := prometheus.Labels{
-		"zone":       zone,
-		"nameserver": ns.hostname,
-		"ip":         ns.ip,
+	result.Metrics = map[string]float64{
+		"ns_recursion_available": raValue,
 	}
-	newGauge(registry, "dnshealth_ns_recursion_available",
-		"Whether the nameserver allows recursive queries (1=allows, 0=refuses).",
-		labels, value)
-
-	return nil
+	return result
 }

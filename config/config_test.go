@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoad_ValidConfig(t *testing.T) {
@@ -64,6 +65,66 @@ func TestLoad_InvalidYAML(t *testing.T) {
 	// Verification
 	if err == nil {
 		t.Fatal("expected error for invalid YAML, got nil")
+	}
+}
+
+func TestLoad_DefaultTimingValues(t *testing.T) {
+	// Fixture Setup — no timing fields specified
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	os.WriteFile(path, []byte("zones:\n  - example.com\n"), 0644)
+
+	// Exercise SUT
+	cfg, err := Load(path)
+
+	// Verification — defaults applied
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ProbeInterval != 60*time.Second {
+		t.Errorf("probe_interval: got %v, want 60s", cfg.ProbeInterval)
+	}
+	if cfg.DelegationCacheTTL != 30*time.Minute {
+		t.Errorf("delegation_cache_ttl: got %v, want 30m", cfg.DelegationCacheTTL)
+	}
+	if cfg.QueryTimeout != 5*time.Second {
+		t.Errorf("query_timeout: got %v, want 5s", cfg.QueryTimeout)
+	}
+	if cfg.ZoneDeadline != 30*time.Second {
+		t.Errorf("zone_deadline: got %v, want 30s", cfg.ZoneDeadline)
+	}
+}
+
+func TestLoad_CustomTimingValues(t *testing.T) {
+	// Fixture Setup
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	os.WriteFile(path, []byte(`zones:
+  - example.com
+probe_interval: 120s
+delegation_cache_ttl: 1h
+query_timeout: 10s
+zone_deadline: 45s
+`), 0644)
+
+	// Exercise SUT
+	cfg, err := Load(path)
+
+	// Verification
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ProbeInterval != 120*time.Second {
+		t.Errorf("probe_interval: got %v, want 120s", cfg.ProbeInterval)
+	}
+	if cfg.DelegationCacheTTL != time.Hour {
+		t.Errorf("delegation_cache_ttl: got %v, want 1h", cfg.DelegationCacheTTL)
+	}
+	if cfg.QueryTimeout != 10*time.Second {
+		t.Errorf("query_timeout: got %v, want 10s", cfg.QueryTimeout)
+	}
+	if cfg.ZoneDeadline != 45*time.Second {
+		t.Errorf("zone_deadline: got %v, want 45s", cfg.ZoneDeadline)
 	}
 }
 

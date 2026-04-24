@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -13,18 +14,22 @@ import (
 type Config struct {
 	Zones []string `yaml:"zones"`
 
+	// ProbeInterval is how often probe cycles run. Default: 60s.
+	ProbeInterval time.Duration `yaml:"probe_interval"`
+
+	// DelegationCacheTTL is how long delegation walk results are cached.
+	// Only applies to non-target infrastructure (root, TLD, parent).
+	// Default: 30m.
+	DelegationCacheTTL time.Duration `yaml:"delegation_cache_ttl"`
+
+	// QueryTimeout is the timeout for individual DNS queries. Default: 5s.
+	QueryTimeout time.Duration `yaml:"query_timeout"`
+
+	// ZoneDeadline is the overall deadline per zone. Outstanding queries
+	// are cancelled when this expires. Default: 30s.
+	ZoneDeadline time.Duration `yaml:"zone_deadline"`
+
 	// AddressOverrides maps an IP address to a host:port pair.
-	// When the exporter discovers a nameserver at a given IP,
-	// it queries the overridden address instead.
-	//
-	// This is useful for testing (nameservers on non-standard
-	// ports) and production scenarios like querying through
-	// proxies or non-standard port deployments.
-	//
-	// Example:
-	//   address_overrides:
-	//     "127.240.0.2": "127.240.0.2:10053"
-	//     "10.0.0.5": "10.0.0.5:5353"
 	AddressOverrides map[string]string `yaml:"address_overrides"`
 }
 
@@ -52,11 +57,28 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 
+	cfg.applyDefaults()
+
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+func (c *Config) applyDefaults() {
+	if c.ProbeInterval == 0 {
+		c.ProbeInterval = 60 * time.Second
+	}
+	if c.DelegationCacheTTL == 0 {
+		c.DelegationCacheTTL = 30 * time.Minute
+	}
+	if c.QueryTimeout == 0 {
+		c.QueryTimeout = 5 * time.Second
+	}
+	if c.ZoneDeadline == 0 {
+		c.ZoneDeadline = 30 * time.Second
+	}
 }
 
 func (c *Config) validate() error {

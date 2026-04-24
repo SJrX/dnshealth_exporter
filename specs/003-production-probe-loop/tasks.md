@@ -102,14 +102,14 @@
 - [x] T031 [US3] Integration test: slow zone doesn't block others in `cycle/runner_test.go` — one zone has Drop fixture (timeout), other zones complete normally
 - [x] T032 [US3] Integration test: delegation cache hit in `cache/delegation_test.go` — walk delegation, verify cached, walk again within TTL, verify no DNS query made
 - [x] T033 [US3] Integration test: delegation cache expiry in `cache/delegation_test.go` — walk, wait past TTL, walk again, verify fresh DNS query made
-- [ ] T034 [US3] Integration test: retry on transient failure in `cycle/runner_test.go` — fixture drops first query but responds to second (retry), verify success
-- [ ] T035 [US3] Integration test: no retry on NXDOMAIN in `cycle/runner_test.go` — fixture returns NXDOMAIN, verify only one query made (no retry)
-- [ ] T036 [US3] Unit test: operational counters increment in `cycle/runner_test.go` — run cycle, verify `dnshealth_dns_queries_total`, `dnshealth_dns_query_duration_seconds_total`, `dnshealth_dns_timeouts_total` counters on permanent registry
+- [x] T034 [US3] Integration test: retry on transient failure in `cycle/runner_test.go` — fixture drops first query but responds to second (retry), verify success
+- [x] T035 [US3] Integration test: no retry on NXDOMAIN in `cycle/runner_test.go` — fixture returns NXDOMAIN, verify only one query made (no retry)
+- [x] T036 [US3] Unit test: operational counters increment in `cycle/runner_test.go` — run cycle, verify `dnshealth_dns_queries_total`, `dnshealth_dns_query_duration_seconds_total`, `dnshealth_dns_timeouts_total` counters on permanent registry
 
 ### Implementation for US3
 
-- [ ] T037 [US3] Implement retry logic in `cycle/runner.go` — on timeout/network error: retry once with half timeout. On NXDOMAIN/REFUSED: no retry.
-- [ ] T038 [US3] Implement operational counters on permanent registry in `cycle/runner.go` — `dnshealth_dns_queries_total{server}`, `dnshealth_dns_query_duration_seconds_total{server}`, `dnshealth_dns_timeouts_total{server}`, `dnshealth_probe_cycle_duration_seconds`, `dnshealth_probe_zones_total`
+- [x] T037 [US3] Implement retry logic in `cycle/runner.go` — on timeout/network error: retry once with half timeout. On NXDOMAIN/REFUSED: no retry.
+- [x] T038 [US3] Implement operational counters on permanent registry in `cycle/runner.go` — `dnshealth_dns_queries_total{server}`, `dnshealth_dns_query_duration_seconds_total{server}`, `dnshealth_dns_timeouts_total{server}`, `dnshealth_probe_cycle_duration_seconds`, `dnshealth_probe_zones_total`
 - [x] T039 [US3] Implement delegation cache TTL + concurrency in `cache/delegation.go` — `sync.RWMutex`, Get returns nil on miss or expired, Set stores with timestamp
 
 **Checkpoint**: All zones probed concurrently, delegation cached, retries work, operational counters visible.
@@ -118,10 +118,10 @@
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T040 Update `README.md` — document new config options (probe_interval, delegation_cache_ttl, query_timeout, zone_deadline), config reload (SIGHUP + /-/reload), operational metrics
-- [ ] T041 Update `dnshealth.yml` example config — add commented-out examples of new fields with defaults
-- [ ] T042 Run `go vet ./...` and `gofmt -s -w .`
-- [ ] T043 Verify all integration tests pass: `go test -tags=integration -count=1 -v ./...`
+- [x] T040 Update `README.md` — document new config options (probe_interval, delegation_cache_ttl, query_timeout, zone_deadline), config reload (SIGHUP + /-/reload), operational metrics
+- [x] T041 Update `dnshealth.yml` example config — add commented-out examples of new fields with defaults
+- [x] T042 Run `go vet ./...` and `gofmt -s -w .`
+- [x] T043 Verify all integration tests pass: `go test -tags=integration -count=1 -v ./...`
 - [ ] T044 Manual validation: run exporter with real domains, verify metrics refresh every interval, test SIGHUP reload
 
 ---

@@ -33,6 +33,12 @@ Create `dnshealth.yml`:
 zones:
   - example.com
   - example.org
+
+# Optional tuning (shown with defaults):
+# probe_interval: 60s
+# delegation_cache_ttl: 30m
+# query_timeout: 5s
+# zone_deadline: 30s
 ```
 
 ### Run
@@ -41,7 +47,17 @@ zones:
 ./dnshealth_exporter --config.file=dnshealth.yml
 ```
 
-Visit http://localhost:9199/metrics to see output.
+Visit http://localhost:9199/metrics to see output. Metrics refresh every `probe_interval` (default 60s). Returns 503 until the first probe cycle completes.
+
+### Config Reload
+
+Reload configuration without restart:
+
+```bash
+kill -HUP $(pgrep dnshealth_exporter)
+# or
+curl -X POST http://localhost:9199/-/reload
+```
 
 ### Test
 

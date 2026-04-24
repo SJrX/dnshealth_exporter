@@ -40,7 +40,7 @@ func probeSOAForNS(ctx context.Context, zone string, ns Nameserver, client *dns.
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeSOA)
 
-	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.IP))
+	resp, _, err := ExchangeWithRetry(ctx, client, msg, ResolveAddress(ns.IP))
 	result.Duration = time.Since(start)
 
 	if err != nil {

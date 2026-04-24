@@ -128,7 +128,7 @@ func querySelfForNSAndA(ctx context.Context, zone string, ns Nameserver, client 
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeNS)
 
-	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.IP))
+	resp, _, err := ExchangeWithRetry(ctx, client, msg, ResolveAddress(ns.IP))
 	if err != nil {
 		return nil, nil, fmt.Errorf("querying NS at %s: %w", ns.IP, err)
 	}
@@ -141,7 +141,7 @@ func querySelfForNSAndA(ctx context.Context, zone string, ns Nameserver, client 
 
 		aMsg := new(dns.Msg)
 		aMsg.SetQuestion(nsRR.Ns, dns.TypeA)
-		aResp, _, err := client.ExchangeContext(ctx, aMsg, ResolveAddress(ns.IP))
+		aResp, _, err := ExchangeWithRetry(ctx, client, aMsg, ResolveAddress(ns.IP))
 		if err != nil {
 			logger.Debug("could not resolve NS via authoritative", "ns", nsRR.Ns, "server", ns.IP, "err", err)
 			continue

@@ -130,4 +130,3 @@ func TestRecursionProber_MixedRecursionAcrossNameservers(t *testing.T) {
 	AssertGauge(t, metrics, "dnshealth_ns_recursion_available",
 		WithLabels("ip", "127.240.0.4"), WithValue(0))
 }
-

@@ -100,15 +100,45 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 	return result
 }
 
-// probeZone runs all checks for a single zone.
+// probeZone does the delegation walk once, discovers nameservers
+// once, then runs all checks with the shared results.
 func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config) []prober.ProbeResult {
 	client := &dns.Client{Timeout: cfg.QueryTimeout}
 
+	// Delegation walk — once per zone per cycle
+	delegation, err := prober.WalkDelegation(ctx, zone, client, r.Logger)
+	if err != nil {
+		r.Logger.Warn("delegation walk failed", "zone", zone, "err", err)
+		return nil
+	}
+
+	// Discover nameservers — resolve missing IPs (no-glue case)
+	var nameservers []prober.Nameserver
+	for _, ns := range delegation.NSRecords {
+		if ns.IP != "" {
+			nameservers = append(nameservers, ns)
+			continue
+		}
+		ip, err := prober.ResolveHostname(ctx, ns.Hostname, client, r.Logger)
+		if err != nil {
+			r.Logger.Warn("could not resolve NS hostname",
+				"zone", zone, "ns", ns.Hostname, "err", err)
+			continue
+		}
+		nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+	}
+
+	if len(nameservers) == 0 {
+		r.Logger.Warn("no nameservers found", "zone", zone)
+		return nil
+	}
+
+	// Run all checks with the shared nameservers and delegation
 	var allResults []prober.ProbeResult
 	for name, fn := range prober.Probers {
 		r.Logger.Debug("running probe", "check", name, "zone", zone)
 
-		results, err := fn(ctx, zone, client, r.Logger)
+		results, err := fn(ctx, zone, nameservers, delegation, client, r.Logger)
 		if err != nil {
 			r.Logger.Warn("probe failed", "check", name, "zone", zone, "err", err)
 			continue

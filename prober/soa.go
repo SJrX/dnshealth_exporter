@@ -2,7 +2,6 @@ package prober
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -14,12 +13,7 @@ func init() {
 }
 
 // ProbeSOA queries each nameserver for the SOA record of the given zone.
-func ProbeSOA(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
-	nameservers, err := DiscoverNameservers(ctx, zone, client, logger)
-	if err != nil {
-		return nil, fmt.Errorf("soa: discovering nameservers: %w", err)
-	}
-
+func ProbeSOA(ctx context.Context, zone string, nameservers []Nameserver, delegation *DelegationResult, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
 	var results []ProbeResult
 	for _, ns := range nameservers {
 		result := probeSOAForNS(ctx, zone, ns, client, logger)

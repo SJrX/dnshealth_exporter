@@ -73,6 +73,29 @@ Integration tests (no Docker needed — uses in-process DNS servers):
 go test -tags=integration ./...
 ```
 
+### Systemd
+
+Example unit file:
+
+```ini
+[Unit]
+Description=DNS Health Exporter
+After=network.target
+
+[Service]
+Type=simple
+User=dnshealth_exporter
+ExecStart=/usr/local/bin/dnshealth_exporter --config.file=/etc/dnshealth_exporter/config.yml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`systemctl reload dnshealth_exporter` sends SIGHUP to reload configuration.
+
 ## Status
 
 Early development — SOA, recursion-available, and glue consistency checks implemented.

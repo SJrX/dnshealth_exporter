@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,15 +35,30 @@ type ServerOptions struct {
 	Drop bool
 	// Garbage sends random bytes instead of a valid DNS response.
 	Garbage bool
+	// DropFirstN drops the first N queries, then responds normally.
+	// Useful for testing retry logic.
+	DropFirstN int
+}
+
+// QueryCount returns the number of queries received by a server.
+// Only works for servers added via ServerWithOptions.
+func (f *DNSFixture) QueryCount(addr string) int {
+	for _, srv := range f.servers {
+		if srv.addr == addr {
+			return int(srv.queryCount.Load())
+		}
+	}
+	return 0
 }
 
 type testServer struct {
-	addr     string
-	records  []mdns.RR
-	referral bool // if true, return NS records as referrals (Authority section)
-	options  ServerOptions
-	server   *mdns.Server
-	wg       sync.WaitGroup
+	addr       string
+	records    []mdns.RR
+	referral   bool // if true, return NS records as referrals (Authority section)
+	options    ServerOptions
+	server     *mdns.Server
+	wg         sync.WaitGroup
+	queryCount atomic.Int64
 }
 
 // NewDNSFixture creates a new fixture manager.
@@ -146,8 +162,15 @@ func startTestServer(t testing.TB, srv *testServer) {
 
 	mux := mdns.NewServeMux()
 	mux.HandleFunc(".", func(w mdns.ResponseWriter, r *mdns.Msg) {
+		srv.queryCount.Add(1)
+
 		// Drop: silently ignore the query (client will timeout)
 		if srv.options.Drop {
+			return
+		}
+
+		// DropFirstN: drop the first N queries, then respond normally
+		if srv.options.DropFirstN > 0 && int(srv.queryCount.Load()) <= srv.options.DropFirstN {
 			return
 		}
 
@@ -254,7 +277,7 @@ func startTestServer(t testing.TB, srv *testServer) {
 
 	// Wait for server to be ready (skip for Drop/Garbage servers —
 	// they won't respond to readiness checks)
-	if srv.options.Drop || srv.options.Garbage {
+	if srv.options.Drop || srv.options.Garbage || srv.options.DropFirstN > 0 {
 		time.Sleep(50 * time.Millisecond)
 		return
 	}

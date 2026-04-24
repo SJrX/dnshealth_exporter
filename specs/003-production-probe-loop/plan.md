@@ -81,11 +81,12 @@ Each probe cycle:
 
 ### Prober Refactor
 
-Current: `ProbeFn(ctx, zone, client, registry, logger) error`
-New: `ProbeFn(ctx, zone, client, logger) ([]ProbeResult, error)`
+Original: `ProbeFn(ctx, zone, client, registry, logger) error`
+Final: `ProbeFn(ctx, zone, nameservers, delegation, client, logger) ([]ProbeResult, error)`
 
-Probers return data. Registry is built centrally. This is the
-biggest code change — every prober file and test needs updating.
+Probers receive pre-discovered nameservers and delegation result
+(walked once per zone by the cycle runner). Probers return data.
+Registry is built centrally from all results.
 
 ### Delegation Cache
 

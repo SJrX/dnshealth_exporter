@@ -106,4 +106,3 @@ An operator configures the exporter with many zones (10+). The exporter probes a
 - This feature does not change the metrics contract — the same metrics are produced, just refreshed periodically instead of once.
 - A probe cycle fans out all DNS queries as independent concurrent operations (scatter), collects all results (gather), and builds a complete new metric set from the results. The new metric set replaces the old one atomically. This naturally handles nameserver removal — if a NS is gone from delegation, it won't be in the new results.
 - If the cycle hits its overall timeout before all queries complete, it cancels outstanding queries, discards incomplete results for those queries, and builds metrics from whatever did complete. A subsequent cycle retries everything.
-- The probers may need refactoring to return structured result data instead of directly registering metrics on a registry. The metrics are built from results at the end, not during probing.

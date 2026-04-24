@@ -15,9 +15,9 @@
 
 **Purpose**: Create new packages and data types
 
-- [ ] T001 Create `prober/result.go` — define `ProbeResult` struct with Zone, Check, Nameserver, IP, Success, Duration, Metrics (map[string]float64), Labels (map[string]string)
-- [ ] T002 Create `cache/delegation.go` — delegation cache with `sync.RWMutex`, Get/Set methods, TTL-based expiry, Invalidate method
-- [ ] T003 Create `cycle/runner.go` — stub `CycleRunner` struct with `Run(ctx, config, cache, logger)` method signature returning `[]ProbeResult`
+- [x] T001 Create `prober/result.go` — define `ProbeResult` struct with Zone, Check, Nameserver, IP, Success, Duration, Metrics (map[string]float64), Labels (map[string]string)
+- [x] T002 Create `cache/delegation.go` — delegation cache with `sync.RWMutex`, Get/Set methods, TTL-based expiry, Invalidate method
+- [x] T003 Create `cycle/runner.go` — stub `CycleRunner` struct with `Run(ctx, config, cache, logger)` method signature returning `[]ProbeResult`
 
 ---
 
@@ -27,12 +27,12 @@
 
 **⚠️ CRITICAL**: This changes every prober file and test. All existing tests must still pass after refactoring.
 
-- [ ] T004 Refactor `prober/prober.go` — change `ProbeFn` signature from `(ctx, zone, client, registry, logger) error` to `(ctx, zone, client, logger) ([]ProbeResult, error)`. Remove `RunProber` function (replaced by cycle runner). Keep `WalkDelegation`, `discoverNameservers`, `resolveHostname` unchanged for now.
-- [ ] T005 Refactor `prober/soa.go` — `ProbeSOA` returns `[]ProbeResult` with SOA field values in `Metrics` map. Remove all `newGauge` calls. Remove `query_success` and `query_duration` (these become fields on ProbeResult).
-- [ ] T006 [P] Refactor `prober/recursion.go` — `ProbeRecursion` returns `[]ProbeResult`. Remove `newGauge` calls.
-- [ ] T007 [P] Refactor `prober/glue.go` — `ProbeGlue` returns `[]ProbeResult` with source label in Labels map. Remove `newGauge` calls.
-- [ ] T008 Create `prober/registry.go` — `BuildRegistry(results []ProbeResult) *prometheus.Registry` function that creates a registry and registers all metrics from ProbeResult data. This centralizes metric creation.
-- [ ] T009 Refactor all prober integration tests (`prober/soa_test.go`, `prober/recursion_test.go`, `prober/glue_test.go`) — update to call probers with new signature, use `BuildRegistry` to create registry from results, then assert with existing `testutil` helpers. All 18 existing tests must pass.
+- [x] T004 Refactor `prober/prober.go` — change `ProbeFn` signature from `(ctx, zone, client, registry, logger) error` to `(ctx, zone, client, logger) ([]ProbeResult, error)`. Remove `RunProber` function (replaced by cycle runner). Keep `WalkDelegation`, `discoverNameservers`, `resolveHostname` unchanged for now.
+- [x] T005 Refactor `prober/soa.go` — `ProbeSOA` returns `[]ProbeResult` with SOA field values in `Metrics` map. Remove all `newGauge` calls. Remove `query_success` and `query_duration` (these become fields on ProbeResult).
+- [x] T006 [P] Refactor `prober/recursion.go` — `ProbeRecursion` returns `[]ProbeResult`. Remove `newGauge` calls.
+- [x] T007 [P] Refactor `prober/glue.go` — `ProbeGlue` returns `[]ProbeResult` with source label in Labels map. Remove `newGauge` calls.
+- [x] T008 Create `prober/registry.go` — `BuildRegistry(results []ProbeResult) *prometheus.Registry` function that creates a registry and registers all metrics from ProbeResult data. This centralizes metric creation.
+- [x] T009 Refactor all prober integration tests (`prober/soa_test.go`, `prober/recursion_test.go`, `prober/glue_test.go`) — update to call probers with new signature, use `BuildRegistry` to create registry from results, then assert with existing `testutil` helpers. All 18 existing tests must pass.
 - [ ] T010 Add config fields to `config/config.go` — `ProbeInterval` (duration, default 60s), `DelegationCacheTTL` (duration, default 30m), `QueryTimeout` (duration, default 5s), `ZoneDeadline` (duration, default 30s)
 - [ ] T011 Add unit tests for new config fields in `config/config_test.go` — test parsing with all new fields, test defaults when omitted
 

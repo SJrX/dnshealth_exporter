@@ -7,57 +7,45 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 func init() {
 	RegisterProber("soa", ProbeSOA)
 }
 
-// ProbeSOA queries each nameserver for the SOA record of the given zone
-// and registers gauges for each SOA field.
-func ProbeSOA(ctx context.Context, zone string, client *dns.Client, registry prometheus.Registerer, logger *slog.Logger) error {
-	nameservers, err := discoverNameservers(ctx, zone, client, logger)
+// ProbeSOA queries each nameserver for the SOA record of the given zone.
+func ProbeSOA(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error) {
+	nameservers, err := DiscoverNameservers(ctx, zone, client, logger)
 	if err != nil {
-		return fmt.Errorf("soa: discovering nameservers: %w", err)
+		return nil, fmt.Errorf("soa: discovering nameservers: %w", err)
 	}
 
+	var results []ProbeResult
 	for _, ns := range nameservers {
-		nsLabels := prometheus.Labels{
-			"zone":       zone,
-			"nameserver": ns.hostname,
-			"ip":         ns.ip,
-		}
-
-		start := time.Now()
-		err := probeSOAForNS(ctx, zone, ns, client, registry, logger)
-		elapsed := time.Since(start).Seconds()
-
-		newGauge(registry, "dnshealth_soa_query_duration_seconds",
-			"Duration of the SOA query to this nameserver in seconds.",
-			nsLabels, elapsed)
-
-		if err != nil {
-			logger.Warn("soa check failed for nameserver", "zone", zone, "nameserver", ns.hostname, "ip", ns.ip, "err", err)
-			newGauge(registry, "dnshealth_soa_query_success",
-				"Whether the SOA query to this nameserver succeeded (1=success, 0=failure).",
-				nsLabels, 0)
-		} else {
-			newGauge(registry, "dnshealth_soa_query_success",
-				"Whether the SOA query to this nameserver succeeded (1=success, 0=failure).",
-				nsLabels, 1)
-		}
+		result := probeSOAForNS(ctx, zone, ns, client, logger)
+		results = append(results, result)
 	}
-	return nil
+	return results, nil
 }
 
-func probeSOAForNS(ctx context.Context, zone string, ns nameserver, client *dns.Client, registry prometheus.Registerer, logger *slog.Logger) error {
+func probeSOAForNS(ctx context.Context, zone string, ns Nameserver, client *dns.Client, logger *slog.Logger) ProbeResult {
+	result := ProbeResult{
+		Zone:       zone,
+		Check:      "soa",
+		Nameserver: ns.Hostname,
+		IP:         ns.IP,
+	}
+
+	start := time.Now()
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeSOA)
 
-	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.ip))
+	resp, _, err := client.ExchangeContext(ctx, msg, ResolveAddress(ns.IP))
+	result.Duration = time.Since(start)
+
 	if err != nil {
-		return fmt.Errorf("querying %s: %w", ns.ip, err)
+		logger.Warn("soa query failed", "zone", zone, "nameserver", ns.Hostname, "ip", ns.IP, "err", err)
+		return result
 	}
 
 	for _, rr := range resp.Answer {
@@ -66,20 +54,17 @@ func probeSOAForNS(ctx context.Context, zone string, ns nameserver, client *dns.
 			continue
 		}
 
-		labels := prometheus.Labels{
-			"zone":       zone,
-			"nameserver": ns.hostname,
-			"ip":         ns.ip,
+		result.Success = true
+		result.Metrics = map[string]float64{
+			"soa_serial":          float64(soa.Serial),
+			"soa_refresh_seconds": float64(soa.Refresh),
+			"soa_retry_seconds":   float64(soa.Retry),
+			"soa_expire_seconds":  float64(soa.Expire),
+			"soa_minimum_seconds": float64(soa.Minttl),
 		}
-
-		newGauge(registry, "dnshealth_soa_serial", "SOA serial number.", labels, float64(soa.Serial))
-		newGauge(registry, "dnshealth_soa_refresh_seconds", "SOA REFRESH interval in seconds.", labels, float64(soa.Refresh))
-		newGauge(registry, "dnshealth_soa_retry_seconds", "SOA RETRY interval in seconds.", labels, float64(soa.Retry))
-		newGauge(registry, "dnshealth_soa_expire_seconds", "SOA EXPIRE interval in seconds.", labels, float64(soa.Expire))
-		newGauge(registry, "dnshealth_soa_minimum_seconds", "SOA MINIMUM TTL (negative caching) in seconds.", labels, float64(soa.Minttl))
-
-		return nil
+		return result
 	}
 
-	return fmt.Errorf("no SOA record in response from %s", ns.ip)
+	logger.Warn("no SOA record in response", "zone", zone, "nameserver", ns.Hostname, "ip", ns.IP)
+	return result
 }

@@ -6,10 +6,8 @@ import (
 	"log/slog"
 	"net"
 	"strings"
-	"time"
 
 	"github.com/miekg/dns"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // RootServers is the list of root DNS server addresses to start
@@ -31,7 +29,8 @@ var ResolveAddress = func(ip string) string {
 }
 
 // ProbeFn is the signature for all DNS health check probers.
-type ProbeFn func(ctx context.Context, zone string, client *dns.Client, registry prometheus.Registerer, logger *slog.Logger) error
+// Probers return structured results instead of writing to a registry.
+type ProbeFn func(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]ProbeResult, error)
 
 // Probers maps check names to their prober functions.
 var Probers = map[string]ProbeFn{}
@@ -41,71 +40,25 @@ func RegisterProber(name string, fn ProbeFn) {
 	Probers[name] = fn
 }
 
-// RunProber executes a named prober and records common metrics.
-func RunProber(ctx context.Context, name string, zone string, client *dns.Client, registry prometheus.Registerer, logger *slog.Logger) error {
-	fn, ok := Probers[name]
-	if !ok {
-		logger.Error("unknown prober", "name", name)
-		return nil
-	}
-
-	success := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name:        "dnshealth_check_success",
-		Help:        "Whether the check succeeded (1=success, 0=failure).",
-		ConstLabels: prometheus.Labels{"zone": zone, "check": name},
-	})
-	duration := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name:        "dnshealth_check_duration_seconds",
-		Help:        "Duration of the check in seconds.",
-		ConstLabels: prometheus.Labels{"zone": zone, "check": name},
-	})
-	registry.MustRegister(success, duration)
-
-	start := time.Now()
-	err := fn(ctx, zone, client, registry, logger)
-	duration.Set(time.Since(start).Seconds())
-
-	if err != nil {
-		success.Set(0)
-		logger.Warn("check failed", "check", name, "zone", zone, "err", err)
-	} else {
-		success.Set(1)
-	}
-
-	return err
-}
-
-// nameserver represents a discovered nameserver with its hostname and IP.
-type nameserver struct {
-	hostname string
-	ip       string
+// Nameserver represents a discovered nameserver with its hostname and IP.
+type Nameserver struct {
+	Hostname string
+	IP       string
 }
 
 // DelegationResult holds the parent's delegation response for a zone.
 type DelegationResult struct {
-	// ParentServer is the parent server that provided the delegation.
 	ParentServer string
-	// NSRecords are the NS records from the parent's delegation.
-	NSRecords []nameserver
-	// Glue are the A records from the parent's additional section.
-	Glue []nameserver
+	NSRecords    []Nameserver
+	Glue         []Nameserver
 }
 
 // WalkDelegation follows the DNS delegation chain from a root server
-// down to the parent of the target zone. Returns the parent's
-// delegation response (NS records + glue).
-//
-// For example, for "example.com":
-//  1. Query root for "example.com" → referral to .com TLD servers
-//  2. Query .com TLD for "example.com" → delegation to authoritative NSes
-//  3. Return the delegation from step 2
+// down to the parent of the target zone.
 func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) (*DelegationResult, error) {
 	zone = dns.Fqdn(zone)
-
-	// Start with a root server
 	server := RootServers[0]
 
-	// Walk referrals until we get the delegation for our zone
 	for depth := 0; depth < 10; depth++ {
 		msg := new(dns.Msg)
 		msg.SetQuestion(zone, dns.TypeNS)
@@ -118,21 +71,11 @@ func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger
 			return nil, fmt.Errorf("querying %s: %w", server, err)
 		}
 
-		// If we got an authoritative answer with NS records in
-		// the Answer section, we've reached the zone's own servers.
-		// The PREVIOUS hop was the parent — but we want this hop's
-		// referral. If Answer has NS records, the server we queried
-		// IS authoritative. For the parent view, we needed the
-		// referral from the hop before. So we track the last referral.
 		if resp.Authoritative && len(resp.Answer) > 0 {
-			// This server is authoritative for the zone.
-			// Extract NS and glue from the answer.
 			return extractDelegation(server, resp.Answer, resp.Extra, zone), nil
 		}
 
-		// Check for referral in Authority section
 		if len(resp.Ns) > 0 {
-			// Extract NS records from the referral
 			var referralNS []string
 			referralGlue := make(map[string]string)
 
@@ -151,8 +94,6 @@ func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger
 				return nil, fmt.Errorf("empty referral from %s", server)
 			}
 
-			// Check if this referral is for our zone (the parent
-			// is delegating to the zone's own servers)
 			referralZone := ""
 			for _, rr := range resp.Ns {
 				referralZone = rr.Header().Name
@@ -160,11 +101,9 @@ func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger
 			}
 
 			if strings.EqualFold(referralZone, zone) {
-				// This IS the parent delegation we want
 				return extractDelegation(server, resp.Ns, resp.Extra, zone), nil
 			}
 
-			// Follow the referral — pick a server we have glue for
 			nextServer := ""
 			for _, ns := range referralNS {
 				if ip, ok := referralGlue[ns]; ok {
@@ -173,8 +112,6 @@ func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger
 				}
 			}
 			if nextServer == "" {
-				// No glue — try resolving the first NS name
-				// via the current server
 				aMsg := new(dns.Msg)
 				aMsg.SetQuestion(referralNS[0], dns.TypeA)
 				aResp, _, err := client.ExchangeContext(ctx, aMsg, server)
@@ -218,14 +155,14 @@ func extractDelegation(parentServer string, nsSection, extraSection []dns.RR, zo
 			continue
 		}
 		ip := glueMap[nsRR.Ns]
-		result.NSRecords = append(result.NSRecords, nameserver{
-			hostname: nsRR.Ns,
-			ip:       ip,
+		result.NSRecords = append(result.NSRecords, Nameserver{
+			Hostname: nsRR.Ns,
+			IP:       ip,
 		})
 		if ip != "" {
-			result.Glue = append(result.Glue, nameserver{
-				hostname: nsRR.Ns,
-				ip:       ip,
+			result.Glue = append(result.Glue, Nameserver{
+				Hostname: nsRR.Ns,
+				IP:       ip,
 			})
 		}
 	}
@@ -233,29 +170,26 @@ func extractDelegation(parentServer string, nsSection, extraSection []dns.RR, zo
 	return result
 }
 
-// discoverNameservers walks the delegation chain from root to find
+// DiscoverNameservers walks the delegation chain from root to find
 // the authoritative nameservers for a zone, then resolves their IPs.
-func discoverNameservers(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]nameserver, error) {
+func DiscoverNameservers(ctx context.Context, zone string, client *dns.Client, logger *slog.Logger) ([]Nameserver, error) {
 	delegation, err := WalkDelegation(ctx, zone, client, logger)
 	if err != nil {
 		return nil, fmt.Errorf("discovering nameservers: %w", err)
 	}
 
-	var servers []nameserver
+	var servers []Nameserver
 	for _, ns := range delegation.NSRecords {
-		if ns.ip != "" {
+		if ns.IP != "" {
 			servers = append(servers, ns)
 			continue
 		}
-		// No glue — resolve the NS hostname by walking the
-		// delegation chain for the hostname's parent zone.
-		ip, err := resolveHostname(ctx, ns.hostname, client, logger)
+		ip, err := ResolveHostname(ctx, ns.Hostname, client, logger)
 		if err != nil {
-			logger.Warn("could not resolve NS hostname",
-				"ns", ns.hostname, "err", err)
+			logger.Warn("could not resolve NS hostname", "ns", ns.Hostname, "err", err)
 			continue
 		}
-		servers = append(servers, nameserver{hostname: ns.hostname, ip: ip})
+		servers = append(servers, Nameserver{Hostname: ns.Hostname, IP: ip})
 	}
 
 	if len(servers) == 0 {
@@ -264,15 +198,12 @@ func discoverNameservers(ctx context.Context, zone string, client *dns.Client, l
 	return servers, nil
 }
 
-// resolveHostname resolves a DNS hostname to an IPv4 address by
-// walking the delegation chain from root. This handles the no-glue
-// case where the parent doesn't provide A records for nameservers
-// in a different zone.
-func resolveHostname(ctx context.Context, hostname string, client *dns.Client, logger *slog.Logger) (string, error) {
+// ResolveHostname resolves a DNS hostname to an IPv4 address by
+// walking the delegation chain from root.
+func ResolveHostname(ctx context.Context, hostname string, client *dns.Client, logger *slog.Logger) (string, error) {
 	hostname = dns.Fqdn(hostname)
-
-	// Walk referrals from root to find who's authoritative for this name
 	server := RootServers[0]
+
 	for depth := 0; depth < 10; depth++ {
 		msg := new(dns.Msg)
 		msg.SetQuestion(hostname, dns.TypeA)
@@ -283,14 +214,12 @@ func resolveHostname(ctx context.Context, hostname string, client *dns.Client, l
 			return "", fmt.Errorf("querying %s for %s: %w", server, hostname, err)
 		}
 
-		// Check for A record in answer
 		for _, rr := range resp.Answer {
 			if a, ok := rr.(*dns.A); ok {
 				return a.A.String(), nil
 			}
 		}
 
-		// Follow referral
 		if len(resp.Ns) > 0 {
 			glueMap := make(map[string]string)
 			for _, rr := range resp.Extra {
@@ -315,15 +244,4 @@ func resolveHostname(ctx context.Context, hostname string, client *dns.Client, l
 	}
 
 	return "", fmt.Errorf("resolution exceeded max depth for %s", hostname)
-}
-
-// newGauge creates a new gauge, registers it, and sets its value.
-func newGauge(registry prometheus.Registerer, name, help string, labels prometheus.Labels, value float64) {
-	g := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name:        name,
-		Help:        help,
-		ConstLabels: labels,
-	})
-	registry.MustRegister(g)
-	g.Set(value)
 }

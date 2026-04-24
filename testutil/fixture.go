@@ -104,19 +104,19 @@ func (f *DNSFixture) Stop() {
 	}
 }
 
-// Probe calls a prober function against a zone and returns the
-// registry containing the registered metrics.
+// Probe calls a prober function against a zone, builds a registry
+// from the results, and returns it.
 func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry {
 	f.t.Helper()
-	registry := prometheus.NewRegistry()
 	client := &mdns.Client{Timeout: 1 * time.Second}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := context.Background()
 
-	if err := fn(ctx, zone, client, registry, logger); err != nil {
+	results, err := fn(ctx, zone, client, logger)
+	if err != nil {
 		f.t.Logf("Probe returned error: %v", err)
 	}
-	return registry
+	return prober.BuildRegistry(results)
 }
 
 func startTestServer(t testing.TB, srv *testServer) {

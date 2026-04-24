@@ -55,9 +55,8 @@ func main() {
 		logger.Info("Address overrides configured", "count", len(cfg.AddressOverrides))
 	}
 
-	registry := prometheus.NewRegistry()
-
-	// Register build info
+	// Permanent registry for build info and operational counters
+	permanentRegistry := prometheus.NewRegistry()
 	buildInfo := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "dnshealth_build_info",
 		Help: "Build information for the exporter.",
@@ -68,14 +67,16 @@ func main() {
 		},
 	})
 	buildInfo.Set(1)
-	registry.MustRegister(buildInfo)
+	permanentRegistry.MustRegister(buildInfo)
 
-	// Run initial probe
-	runAllProbes(context.Background(), cfg, registry, logger)
+	// Run initial probe (temporary — will be replaced by cycle runner)
+	cycleRegistry := runAllProbes(context.Background(), cfg, logger)
 
 	// Set up HTTP server
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	// Gather from both permanent and cycle registries
+	gatherers := prometheus.Gatherers{permanentRegistry, cycleRegistry}
+	mux.Handle("/metrics", promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}))
 	mux.HandleFunc("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
@@ -117,12 +118,19 @@ func main() {
 	logger.Info("Shutdown complete")
 }
 
-func runAllProbes(ctx context.Context, cfg *config.Config, registry prometheus.Registerer, logger *slog.Logger) {
+func runAllProbes(ctx context.Context, cfg *config.Config, logger *slog.Logger) *prometheus.Registry {
 	client := &dns.Client{Timeout: 5 * time.Second}
+	var allResults []prober.ProbeResult
 	for _, zone := range cfg.Zones {
-		for name := range prober.Probers {
+		for name, fn := range prober.Probers {
 			logger.Debug("Running probe", "check", name, "zone", zone)
-			prober.RunProber(ctx, name, zone, client, registry, logger)
+			results, err := fn(ctx, zone, client, logger)
+			if err != nil {
+				logger.Warn("probe failed", "check", name, "zone", zone, "err", err)
+				continue
+			}
+			allResults = append(allResults, results...)
 		}
 	}
+	return prober.BuildRegistry(allResults)
 }

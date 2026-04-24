@@ -67,4 +67,3 @@ func TestA_CreatesValidRecord(t *testing.T) {
 		t.Errorf("ip: got %s, want 127.240.0.2", a.A.String())
 	}
 }
-

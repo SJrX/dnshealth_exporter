@@ -77,11 +77,8 @@ func main() {
 	// Delegation cache
 	delegationCache := cache.NewDelegationCache(cfg.DelegationCacheTTL)
 
-	// Cycle runner
-	runner := &cycle.Runner{
-		Cache:  delegationCache,
-		Logger: logger,
-	}
+	// Cycle runner with operational metrics on permanent registry
+	runner := cycle.NewRunner(delegationCache, logger, permanentRegistry)
 
 	// Atomic config pointer for reload support
 	var currentConfig atomic.Pointer[config.Config]

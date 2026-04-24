@@ -98,4 +98,3 @@ func A(name, ip string) dns.RR {
 		A: net.ParseIP(ip),
 	}
 }
-

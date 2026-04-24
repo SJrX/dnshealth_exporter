@@ -48,11 +48,11 @@
 
 ### Tests for US1
 
-- [ ] T012 [US1] Integration test: probe cycle runs and updates metrics in `cycle/runner_test.go` — start fixture DNS servers, run one cycle, verify ProbeResults contain expected metrics, build registry, assert metrics present
-- [ ] T013 [US1] Integration test: metrics refresh on subsequent cycles in `cycle/runner_test.go` — run cycle with serial X, change fixture to serial Y, run another cycle, verify serial Y in results
-- [ ] T014 [US1] Integration test: 503 before first cycle completes in `main_test.go` — start exporter, immediately curl `/metrics`, assert HTTP 503
-- [ ] T015 [US1] Integration test: stale NS removed from metrics in `cycle/runner_test.go` — cycle 1 has ns1+ns2, cycle 2 fixture removes ns2, verify ns2 metrics absent in cycle 2 results
-- [ ] T016 [US1] Integration test: cycle overlap prevention in `cycle/runner_test.go` — configure very short interval with slow fixture, verify cycles don't stack
+- [x] T012 [US1] Integration test: probe cycle runs and updates metrics in `cycle/runner_test.go` — start fixture DNS servers, run one cycle, verify ProbeResults contain expected metrics, build registry, assert metrics present
+- [x] T013 [US1] Integration test: metrics refresh on subsequent cycles in `cycle/runner_test.go` — run cycle with serial X, change fixture to serial Y, run another cycle, verify serial Y in results
+- [x] T014 [US1] Integration test: 503 before first cycle completes in `main_test.go` — start exporter, immediately curl `/metrics`, assert HTTP 503
+- [x] T015 [US1] Integration test: stale NS removed from metrics in `cycle/runner_test.go` — cycle 1 has ns1+ns2, cycle 2 fixture removes ns2, verify ns2 metrics absent in cycle 2 results
+- [x] T016 [US1] Integration test: cycle overlap prevention in `cycle/runner_test.go` — configure very short interval with slow fixture, verify cycles don't stack
 
 ### Implementation for US1
 
@@ -98,10 +98,10 @@
 
 ### Tests for US3
 
-- [ ] T030 [US3] Integration test: parallel zone probing in `cycle/runner_test.go` — configure 5 zones with separate fixtures, verify all 5 probed (not sequential timing)
-- [ ] T031 [US3] Integration test: slow zone doesn't block others in `cycle/runner_test.go` — one zone has Drop fixture (timeout), other zones complete normally
-- [ ] T032 [US3] Integration test: delegation cache hit in `cache/delegation_test.go` — walk delegation, verify cached, walk again within TTL, verify no DNS query made
-- [ ] T033 [US3] Integration test: delegation cache expiry in `cache/delegation_test.go` — walk, wait past TTL, walk again, verify fresh DNS query made
+- [x] T030 [US3] Integration test: parallel zone probing in `cycle/runner_test.go` — configure 5 zones with separate fixtures, verify all 5 probed (not sequential timing)
+- [x] T031 [US3] Integration test: slow zone doesn't block others in `cycle/runner_test.go` — one zone has Drop fixture (timeout), other zones complete normally
+- [x] T032 [US3] Integration test: delegation cache hit in `cache/delegation_test.go` — walk delegation, verify cached, walk again within TTL, verify no DNS query made
+- [x] T033 [US3] Integration test: delegation cache expiry in `cache/delegation_test.go` — walk, wait past TTL, walk again, verify fresh DNS query made
 - [ ] T034 [US3] Integration test: retry on transient failure in `cycle/runner_test.go` — fixture drops first query but responds to second (retry), verify success
 - [ ] T035 [US3] Integration test: no retry on NXDOMAIN in `cycle/runner_test.go` — fixture returns NXDOMAIN, verify only one query made (no retry)
 - [ ] T036 [US3] Unit test: operational counters increment in `cycle/runner_test.go` — run cycle, verify `dnshealth_dns_queries_total`, `dnshealth_dns_query_duration_seconds_total`, `dnshealth_dns_timeouts_total` counters on permanent registry
@@ -110,7 +110,7 @@
 
 - [ ] T037 [US3] Implement retry logic in `cycle/runner.go` — on timeout/network error: retry once with half timeout. On NXDOMAIN/REFUSED: no retry.
 - [ ] T038 [US3] Implement operational counters on permanent registry in `cycle/runner.go` — `dnshealth_dns_queries_total{server}`, `dnshealth_dns_query_duration_seconds_total{server}`, `dnshealth_dns_timeouts_total{server}`, `dnshealth_probe_cycle_duration_seconds`, `dnshealth_probe_zones_total`
-- [ ] T039 [US3] Implement delegation cache TTL + concurrency in `cache/delegation.go` — `sync.RWMutex`, Get returns nil on miss or expired, Set stores with timestamp
+- [x] T039 [US3] Implement delegation cache TTL + concurrency in `cache/delegation.go` — `sync.RWMutex`, Get returns nil on miss or expired, Set stores with timestamp
 
 **Checkpoint**: All zones probed concurrently, delegation cached, retries work, operational counters visible.
 

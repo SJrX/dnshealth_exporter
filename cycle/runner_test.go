@@ -550,3 +550,89 @@ func TestCycleRunner_TimeoutCounterDoesNotIncrementOnSERVFAIL(t *testing.T) {
 		t.Errorf("dnshealth_dns_queries_total{server=127.240.0.2}: got %v, want >= 1 (sanity)", queries)
 	}
 }
+
+// unlabeledCounterValue returns the value of an unlabeled counter,
+// or 0 if no series exists.
+func unlabeledCounterValue(t *testing.T, reg *prometheus.Registry, metric string) float64 {
+	t.Helper()
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gathering metrics: %v", err)
+	}
+	for _, f := range families {
+		if f.GetName() != metric {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			return m.GetCounter().GetValue()
+		}
+	}
+	return 0
+}
+
+func TestCycleRunner_DelegationCacheCountersTrackHitsAndMisses(t *testing.T) {
+	// Fixture Setup — standard zone, no fancy options
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+CycleTestPort,
+			SOA("example.test", Serial(1)),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 5 * time.Second,
+		ZoneDeadline: 30 * time.Second,
+	}
+
+	// Exercise SUT — first cycle: cache empty → miss
+	runner.Run(context.Background(), cfg)
+
+	misses1 := unlabeledCounterValue(t, permRegistry, "dnshealth_delegation_cache_misses_total")
+	hits1 := unlabeledCounterValue(t, permRegistry, "dnshealth_delegation_cache_hits_total")
+	if misses1 != 1 {
+		t.Errorf("after first cycle: misses=%v, want 1", misses1)
+	}
+	if hits1 != 0 {
+		t.Errorf("after first cycle: hits=%v, want 0", hits1)
+	}
+
+	// Exercise SUT — second cycle: same zone, within TTL → hit
+	runner.Run(context.Background(), cfg)
+
+	misses2 := unlabeledCounterValue(t, permRegistry, "dnshealth_delegation_cache_misses_total")
+	hits2 := unlabeledCounterValue(t, permRegistry, "dnshealth_delegation_cache_hits_total")
+	if misses2 != 1 {
+		t.Errorf("after second cycle: misses=%v, want 1 (no new miss)", misses2)
+	}
+	if hits2 != 1 {
+		t.Errorf("after second cycle: hits=%v, want 1", hits2)
+	}
+
+	// Exercise SUT — invalidate cache, run again → miss again.
+	// This is the reload-style scenario.
+	runner.Cache.Invalidate()
+	runner.Run(context.Background(), cfg)
+
+	misses3 := unlabeledCounterValue(t, permRegistry, "dnshealth_delegation_cache_misses_total")
+	hits3 := unlabeledCounterValue(t, permRegistry, "dnshealth_delegation_cache_hits_total")
+	if misses3 != 2 {
+		t.Errorf("after invalidate + third cycle: misses=%v, want 2", misses3)
+	}
+	if hits3 != 1 {
+		t.Errorf("after invalidate + third cycle: hits=%v, want 1 (no new hit)", hits3)
+	}
+}

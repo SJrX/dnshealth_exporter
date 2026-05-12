@@ -19,11 +19,13 @@ type Runner struct {
 	Logger *slog.Logger
 
 	// Operational metrics on the permanent registry.
-	CycleDuration prometheus.Gauge
-	ZonesProbed   prometheus.Gauge
-	DNSQueries    *prometheus.CounterVec
-	DNSDuration   *prometheus.CounterVec
-	DNSTimeouts   *prometheus.CounterVec
+	CycleDuration         prometheus.Gauge
+	ZonesProbed           prometheus.Gauge
+	DNSQueries            *prometheus.CounterVec
+	DNSDuration           *prometheus.CounterVec
+	DNSTimeouts           *prometheus.CounterVec
+	DelegationCacheHits   prometheus.Counter
+	DelegationCacheMisses prometheus.Counter
 }
 
 // NewRunner creates a Runner and registers operational metrics on
@@ -49,16 +51,26 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		Name: "dnshealth_dns_timeouts_total",
 		Help: "Total DNS query timeouts per server.",
 	}, []string{"server"})
-	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts)
+	cacheHits := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "dnshealth_delegation_cache_hits_total",
+		Help: "Total delegation cache hits.",
+	})
+	cacheMisses := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "dnshealth_delegation_cache_misses_total",
+		Help: "Total delegation cache misses (triggered a fresh walk).",
+	})
+	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts, cacheHits, cacheMisses)
 
 	return &Runner{
-		Cache:         c,
-		Logger:        logger,
-		CycleDuration: cycleDuration,
-		ZonesProbed:   zonesProbed,
-		DNSQueries:    dnsQueries,
-		DNSDuration:   dnsDuration,
-		DNSTimeouts:   dnsTimeouts,
+		Cache:                 c,
+		Logger:                logger,
+		CycleDuration:         cycleDuration,
+		ZonesProbed:           zonesProbed,
+		DNSQueries:            dnsQueries,
+		DNSDuration:           dnsDuration,
+		DNSTimeouts:           dnsTimeouts,
+		DelegationCacheHits:   cacheHits,
+		DelegationCacheMisses: cacheMisses,
 	}
 }
 
@@ -140,8 +152,14 @@ func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config)
 	var delegation *prober.DelegationResult
 	if cached := r.Cache.Get(zone); cached != nil {
 		delegation = cached.(*prober.DelegationResult)
+		if r.DelegationCacheHits != nil {
+			r.DelegationCacheHits.Inc()
+		}
 		r.Logger.Debug("delegation cache hit", "zone", zone)
 	} else {
+		if r.DelegationCacheMisses != nil {
+			r.DelegationCacheMisses.Inc()
+		}
 		var err error
 		delegation, err = prober.WalkDelegation(ctx, zone, client, r.Logger)
 		if err != nil {

@@ -445,3 +445,108 @@ func TestCycleRunner_OperationalCountersIncrement(t *testing.T) {
 		t.Error("dnshealth_dns_queries_total not found on permanent registry")
 	}
 }
+
+// counterValue returns the value of the dnshealth_dns_timeouts_total
+// counter for the given server label, or 0 if no series exists.
+func counterValue(t *testing.T, reg *prometheus.Registry, metric, label, value string) float64 {
+	t.Helper()
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gathering metrics: %v", err)
+	}
+	for _, f := range families {
+		if f.GetName() != metric {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == label && lp.GetValue() == value {
+					return m.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func TestCycleRunner_TimeoutCounterIncrementsOnTimeout(t *testing.T) {
+	// Fixture Setup — referral works, target NS drops all queries
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		ServerWithOptions("127.240.0.2:"+CycleTestPort, ServerOptions{Drop: true}).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 500 * time.Millisecond,
+		ZoneDeadline: 5 * time.Second,
+	}
+
+	// Exercise SUT
+	runner.Run(context.Background(), cfg)
+
+	// Verification — timeouts counter incremented for the dropped server.
+	// soa, recursion, and glue self-query all time out, so >= 1.
+	got := counterValue(t, permRegistry, "dnshealth_dns_timeouts_total", "server", "127.240.0.2")
+	if got < 1 {
+		t.Errorf("dnshealth_dns_timeouts_total{server=127.240.0.2}: got %v, want >= 1", got)
+	}
+}
+
+func TestCycleRunner_TimeoutCounterDoesNotIncrementOnSERVFAIL(t *testing.T) {
+	// Regression test for the original bug — SERVFAIL is a probe
+	// failure but not a timeout. Pre-fix, the timeout counter
+	// incremented on any !Success; post-fix it only increments on
+	// actual network timeouts.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		ServerWithOptions("127.240.0.2:"+CycleTestPort, ServerOptions{Rcode: 2},
+			SOA("example.test"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 2 * time.Second,
+		ZoneDeadline: 10 * time.Second,
+	}
+
+	// Exercise SUT
+	runner.Run(context.Background(), cfg)
+
+	// Verification — SERVFAIL is a probe failure but not a timeout.
+	// The timeout counter must NOT have incremented for this server.
+	got := counterValue(t, permRegistry, "dnshealth_dns_timeouts_total", "server", "127.240.0.2")
+	if got != 0 {
+		t.Errorf("dnshealth_dns_timeouts_total{server=127.240.0.2}: got %v on SERVFAIL, want 0", got)
+	}
+
+	// Sanity check — queries DID happen, so we know the counter would
+	// have been visible if it had incremented.
+	queries := counterValue(t, permRegistry, "dnshealth_dns_queries_total", "server", "127.240.0.2")
+	if queries < 1 {
+		t.Errorf("dnshealth_dns_queries_total{server=127.240.0.2}: got %v, want >= 1 (sanity)", queries)
+	}
+}

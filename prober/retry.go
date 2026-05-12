@@ -2,18 +2,22 @@ package prober
 
 import (
 	"context"
+	"errors"
 	"net"
 	"time"
 
 	"github.com/miekg/dns"
 )
 
-// IsTimeout returns true if the error is a network timeout.
+// IsTimeout returns true if err (or any error it wraps) is a
+// network timeout. Uses errors.As so wrapped errors from
+// fmt.Errorf("...%w", err) are detected.
 func IsTimeout(err error) bool {
 	if err == nil {
 		return false
 	}
-	if netErr, ok := err.(net.Error); ok {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
 		return netErr.Timeout()
 	}
 	return false

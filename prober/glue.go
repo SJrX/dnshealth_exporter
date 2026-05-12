@@ -62,6 +62,7 @@ func ProbeGlue(ctx context.Context, zone string, nameservers []Nameserver, deleg
 				Nameserver: ns.Hostname,
 				IP:         ns.IP,
 				Success:    false,
+				TimedOut:   IsTimeout(err),
 			})
 			continue
 		}

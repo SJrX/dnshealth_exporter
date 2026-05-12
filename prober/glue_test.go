@@ -3,8 +3,13 @@
 package prober_test
 
 import (
+	"context"
+	"log/slog"
+	"os"
 	"testing"
+	"time"
 
+	mdns "github.com/miekg/dns"
 	"github.com/sjr/dnshealth_exporter/prober"
 	. "github.com/sjr/dnshealth_exporter/testutil"
 )
@@ -229,4 +234,49 @@ func TestGlueProber_PartialGlue(t *testing.T) {
 		WithLabels("nameserver", "ns1.example.test.", "source", "self"))
 	AssertGaugeExists(t, metrics, "dnshealth_ns_record",
 		WithLabels("nameserver", "ns2.other.test.", "source", "self"))
+}
+
+func TestGlueProber_TimedOutOnSelfQueryTimeout(t *testing.T) {
+	// Fixture Setup — parent responds normally but the authoritative
+	// NS drops all queries, so the glue self-query times out.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		ServerWithOptions("127.240.0.2:"+TestPort, ServerOptions{Drop: true}).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT — call ProbeGlue directly to inspect raw results.
+	client := &mdns.Client{Timeout: 300 * time.Millisecond}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	ctx := context.Background()
+
+	delegation, err := prober.WalkDelegation(ctx, "example.test", client, logger)
+	if err != nil {
+		t.Fatalf("delegation walk: %v", err)
+	}
+	nameservers := []prober.Nameserver{{Hostname: "ns1.example.test.", IP: "127.240.0.2"}}
+
+	results, err := prober.ProbeGlue(ctx, "example.test", nameservers, delegation, client, logger)
+	if err != nil {
+		t.Fatalf("ProbeGlue: %v", err)
+	}
+
+	// Verification — the failure ProbeResult for ns1's self-query
+	// must have TimedOut=true (this is the bug the commit missed).
+	var found bool
+	for _, r := range results {
+		if r.IP == "127.240.0.2" && !r.Success {
+			found = true
+			if !r.TimedOut {
+				t.Errorf("glue self-query failure on 127.240.0.2: TimedOut=false, want true")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected a Success=false ProbeResult for 127.240.0.2, found none")
+	}
 }

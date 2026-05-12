@@ -123,11 +123,7 @@ func main() {
 			http.Error(w, fmt.Sprintf("Reload failed: %v", err), http.StatusInternalServerError)
 			return
 		}
-		currentConfig.Store(newCfg)
-		if len(newCfg.AddressOverrides) > 0 {
-			prober.ResolveAddress = newCfg.ResolveAddress
-		}
-		delegationCache.Invalidate()
+		applyReloadedConfig(newCfg, &currentConfig, delegationCache)
 		logger.Info("Configuration reloaded", "zones", len(newCfg.Zones))
 		fmt.Fprintln(w, "OK")
 	})
@@ -157,11 +153,7 @@ func main() {
 				logger.Error("Config reload via SIGHUP failed", "err", err)
 				continue
 			}
-			currentConfig.Store(newCfg)
-			if len(newCfg.AddressOverrides) > 0 {
-				prober.ResolveAddress = newCfg.ResolveAddress
-			}
-			delegationCache.Invalidate()
+			applyReloadedConfig(newCfg, &currentConfig, delegationCache)
 			logger.Info("Configuration reloaded via SIGHUP", "zones", len(newCfg.Zones))
 		}
 	}()
@@ -184,6 +176,16 @@ func main() {
 	}
 
 	logger.Info("Shutdown complete")
+}
+
+// applyReloadedConfig swaps in a freshly-loaded config: stores the
+// pointer, rebinds prober.ResolveAddress (unconditionally — removing
+// all overrides via reload must take effect), and invalidates the
+// delegation cache so the next cycle re-walks.
+func applyReloadedConfig(newCfg *config.Config, current *atomic.Pointer[config.Config], delegationCache *cache.DelegationCache) {
+	current.Store(newCfg)
+	prober.ResolveAddress = newCfg.ResolveAddress
+	delegationCache.Invalidate()
 }
 
 func runCycle(runner *cycle.Runner, cfgPtr *atomic.Pointer[config.Config], registryPtr *atomic.Pointer[prometheus.Registry], running chan struct{}, logger *slog.Logger) {

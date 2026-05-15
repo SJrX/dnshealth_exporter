@@ -96,23 +96,26 @@ demo/                                # NEW — all demo artifacts live here
 │   │       └── dashboards.yml       # Provisioning loader
 │   └── dashboards/
 │       └── dnshealth-overview.json  # FR-011, FR-012 — dashboard JSON, source of truth
-├── coredns/
+├── coredns/                         # Final layout after Phase 8 renames + ns-mismatch addition
 │   ├── root/
-│   │   ├── Corefile                 # Serves fake "." and "demo." with delegations
+│   │   ├── Corefile                 # Serves fake "." and "demo." with delegations to all demo zones
 │   │   └── zones/
 │   │       ├── root.zone
 │   │       └── demo.zone
 │   ├── healthy/
 │   │   ├── Corefile
-│   │   └── zones/healthy.demo.zone  # FR-005 — fully healthy
-│   ├── broken-soa-a/
+│   │   └── zones/healthy.demo.zone  # FR-005 — fully healthy; in-bailiwick NSs with explicit glue (T061)
+│   ├── soa-serial-mismatch-a/       # Renamed from broken-soa-a in Phase 8
 │   │   ├── Corefile
-│   │   └── zones/broken-soa.demo.zone  # SOA serial = 100
-│   ├── broken-soa-b/
+│   │   └── zones/soa-serial-mismatch.demo.zone  # SOA serial = 100
+│   ├── soa-serial-mismatch-b/       # Renamed from broken-soa-b in Phase 8
 │   │   ├── Corefile
-│   │   └── zones/broken-soa.demo.zone  # SOA serial = 101 — divergent
-│   └── recursive/
-│       └── Corefile                 # No zones; recursive resolver — RA=1 anomaly
+│   │   └── zones/soa-serial-mismatch.demo.zone  # SOA serial = 101 — divergent
+│   ├── lame-nameserver/             # Renamed from recursive/ in Phase 8 (CoreDNS forwarder; not authoritative)
+│   │   └── Corefile                 # No zone file — auth NS that fails the SOA check
+│   └── ns-mismatch/                 # Added in Phase 8 / T059
+│       ├── Corefile
+│       └── zones/ns-mismatch.demo.zone  # Auth-side NS records intentionally diverge from parent's referral
 └── smoke.sh                         # Brings stack up, waits, asserts /metrics, tears down
 ```
 

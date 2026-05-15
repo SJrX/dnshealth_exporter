@@ -18,7 +18,7 @@ The set of services launched by `demo/docker-compose.yml`.
 
 | Field | Source of truth | Description |
 |---|---|---|
-| `services` | `docker-compose.yml` | exporter, prometheus, grafana, coredns-root, coredns-healthy, coredns-broken-soa-a, coredns-broken-soa-b, coredns-recursive |
+| `services` | `docker-compose.yml` | exporter, prometheus, grafana, coredns-root, coredns-healthy, coredns-soa-serial-mismatch-a, coredns-soa-serial-mismatch-b, coredns-lame-nameserver, coredns-ns-mismatch |
 | `network` | `docker-compose.yml` (default network) | A user-defined bridge network with a fixed IPv4 subnet so static IPs can be assigned to coredns containers |
 | `host_ports` | `.env` (with `.env.example` template) | `GRAFANA_PORT`, `PROMETHEUS_PORT`, `EXPORTER_PORT` |
 
@@ -29,10 +29,11 @@ config and the relevant CoreDNS instance(s).
 
 | Zone | Intended state | Served by | Configured in exporter | Notes |
 |---|---|---|---|---|
-| `healthy.demo.` | healthy across all checks | `coredns-healthy` (advertised as `ns1.demo.` and `ns2.demo.`) | yes | Control case for the dashboard |
-| `broken-soa.demo.` | divergent SOA serial across nameservers | `coredns-broken-soa-a` (serial=100), `coredns-broken-soa-b` (serial=101) | yes | SOA prober flags this |
-| `missing-glue.demo.` | parent NS without A glue, child NS hostname unresolvable | parent (`coredns-root`) only — no auth container | yes | Glue prober / delegation walk fails for this zone |
-| `recursive.demo.` | RA flag returned (recursion offered by an "authoritative") | `coredns-recursive` | yes | Recursion prober flags RA=1 |
+| `healthy.demo.` | healthy across all checks | `coredns-healthy` (advertised as `ns1.healthy.demo.` and `ns2.healthy.demo.`, both in-bailiwick with explicit A glue) | yes | Control case for the dashboard. In-bailiwick NSs are required so the glue prober's self-side A lookup succeeds (see Phase 8 / T061). |
+| `soa-serial-mismatch.demo.` | divergent SOA serial across nameservers | `coredns-soa-serial-mismatch-a` (serial=100), `coredns-soa-serial-mismatch-b` (serial=101) | yes | SOA prober's "All NSs report same SOA serial" status check flags this |
+| `missing-glue.demo.` | parent NS without A glue, child NS hostname unresolvable | parent (`coredns-root`) only — no auth container | yes | Delegation walk fails for this zone; no metrics emitted at all, so the zone does NOT appear in the `$zone` selector in Grafana — the absence is itself the failure signal |
+| `lame-nameserver.demo.` | parent delegates to a server that does not authoritatively serve the zone (renamed from the original `recursive.demo.` in Phase 8 — CoreDNS's `forward` plugin doesn't reliably set RA on referrals, so the actual demonstrable failure is "auth NS that returns no SOA" rather than "RA=1 advertised") | `coredns-lame-nameserver` (a CoreDNS forwarder, not authoritative for the zone) | yes | SOA check fails: `dnshealth_query_success{check="soa",...}=0` |
+| `ns-mismatch.demo.` | parent advertises one NS hostname (`ns1.ns-mismatch.demo.`); the auth server's zone file lists two different NS hostnames (`ns-internal-a.ns-mismatch.demo.`, `ns-internal-b.ns-mismatch.demo.`) | `coredns-ns-mismatch` (single container that handles both the parent-advertised NS and the self-reported NSs at the same IP) | yes | Glue prober emits `dnshealth_ns_record{source="parent"}` (1 row) and `dnshealth_ns_record{source="self"}` (2 rows). Dashboard's "Parent and self report same NS records" status check flags the divergence; Records tables show the differing hostnames side-by-side. |
 
 State transitions: none. The intended state is fixed across runs (per
 SC-004).
@@ -43,7 +44,7 @@ The `dnshealth.yml` shipped with the demo.
 
 | Field | Value | Why |
 |---|---|---|
-| `zones` | `["healthy.demo.", "broken-soa.demo.", "missing-glue.demo.", "recursive.demo."]` | The four DemoZone entries above |
+| `zones` | `["healthy.demo.", "soa-serial-mismatch.demo.", "missing-glue.demo.", "lame-nameserver.demo.", "ns-mismatch.demo."]` | The five DemoZone entries above |
 | `probe_interval` | `15s` | Tighter than 60s production default to satisfy SC-003 |
 | `query_timeout` | `2s` | Shorter than 5s default — local network is fast; faster failure surfaces unhealthy cases sooner |
 | `zone_deadline` | `15s` | Matches probe interval — no point letting a zone deadline overrun the next cycle |
@@ -68,21 +69,41 @@ The `dnshealth.yml` shipped with the demo.
 
 ### DashboardPanel
 
-A single panel in the demo dashboard. The minimum panel set for v1:
+The dashboard is laid out as a per-zone intodns-style report card with
+a `$zone` Grafana templating variable populated from
+`label_values(dnshealth_query_success, zone)`. The current panel set
+(after Phase 7 / 8 / 9 iterations) is:
 
-| Panel title | Query (PromQL) | Visualization | Why |
-|---|---|---|---|
-| Zone health overview | `dnshealth_query_success` | Stat with `Last *` reducer, grouped by `zone`, color thresholds (1=green, 0=red) | One-glance "which zones are healthy" |
-| SOA serials per zone | `dnshealth_soa_serial` | Time series, legend `{{zone}} / {{nameserver}}` | Surfaces the divergent-serial broken zone visually |
-| Recursion availability | `dnshealth_recursion_available` | Stat per zone, threshold (0=green, 1=red) | Flags the recursive demo zone |
-| Query duration | `dnshealth_query_duration_seconds` | Time series by `zone`, `check` | Useful for noticing slow queries |
-| Probe cycle duration | `dnshealth_probe_cycle_duration_seconds` | Time series | Operator visibility into the exporter itself |
-| Cycle queries / cache hit ratio | `rate(dnshealth_dns_queries_total[1m])` and `rate(dnshealth_delegation_cache_hits_total[5m]) / (rate(dnshealth_delegation_cache_hits_total[5m]) + rate(dnshealth_delegation_cache_misses_total[5m]))` | Time series | Shows the cache + traffic shape; useful when iterating on cache changes |
+**Top row — markdown header** with description, demo zone catalogue, link
+to `demo/README.md`.
 
-The dashboard MUST also include a markdown panel at the top with: a one-
-line description, a link to the demo README, and the list of zones with
-their intended states. This makes the dashboard self-explanatory for a
-new viewer.
+**Status row** (3 boolean tables, value mappings 0→FAIL/red, 1→PASS/green):
+
+| Panel | Status checks |
+|---|---|
+| Parent — status | "Parent has NS records for the zone" |
+| NS — status | "Multiple authoritative nameservers (≥2)", "All NSs answered SOA authoritatively", "No NS advertises recursion (RA=0)", "Parent and self report same NS records" |
+| SOA — status | "All NSs report same SOA serial" (guarded against false PASS when no SOA data exists) |
+
+**Records row** (3 raw-data tables, no PASS/FAIL colouring on data columns):
+
+| Panel | Source | Columns |
+|---|---|---|
+| NS records — from parent | `dnshealth_ns_record{source="parent",zone="$zone"}` | Nameserver, Glue IP (empty rendered as "(not provided)") |
+| NS records — from the zone | outer-join of `dnshealth_ns_record{source="self"}`, `dnshealth_query_success{check="soa"}`, `dnshealth_ns_recursion_available`, filtered to rows where the self-side ns_record is present | Nameserver, IP, Responded (yes/no), Recursion (no/RA=1). For NSs only present on the self side (e.g. `ns-mismatch.demo.`'s `ns-internal-a/b`), Responded and Recursion are empty because the exporter only probes parent-listed NSs. |
+| SOA — per-nameserver values | 5 instant queries (`dnshealth_soa_serial`, `_refresh_seconds`, `_retry_seconds`, `_expire_seconds`, `_minimum_seconds`) joined by `nameserver` | Nameserver, IP, Serial, Refresh (s), Retry (s), Expire (s), Min TTL (s) |
+
+**Operator / debug row** — Grafana `row` panel with `collapsed: true`,
+containing 4 time-series panels. SOA-serials and Query-duration panels
+filter by `${zone}` so they follow the Zone selector; Probe-cycle and
+Query-rate panels are global (no zone label):
+
+| Panel | Query | Notes |
+|---|---|---|
+| Probe cycle duration | `dnshealth_probe_cycle_duration_seconds` | Global |
+| Query rate and delegation cache hit ratio | `rate(dnshealth_dns_queries_total[1m])` + `rate(cache_hits)/clamp_min((rate(hits)+rate(misses)),1e-9)` | Global; cache ratio rendered as `percentunit` on right axis |
+| SOA serials per nameserver over time — `${zone}` | `dnshealth_soa_serial{zone="$zone"}` | Per-zone |
+| Query duration (per check / nameserver) — `${zone}` | `dnshealth_query_duration_seconds{zone="$zone"}` | Per-zone |
 
 ---
 

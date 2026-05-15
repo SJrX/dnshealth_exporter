@@ -52,14 +52,15 @@ docker compose up -d
 
 ## What you'll see
 
-The dashboard pre-loads four demo zones served by in-stack CoreDNS:
+The dashboard pre-loads five demo zones served by in-stack CoreDNS, picked via the **Zone** templating selector at the top of the dashboard:
 
 | Zone | Intended state | What the dashboard shows |
 |---|---|---|
-| `healthy.demo.` | healthy | All checks green, single SOA serial, no anomalies |
-| `broken-soa.demo.` | divergent SOA serials between primaries | "SOA serials per zone" panel shows two distinct serial lines (100 and 101) for the same zone |
-| `missing-glue.demo.` | parent NS without A glue | Delegation walk fails; query_success metrics for this zone are missing/zero |
-| `recursive.demo.` | RA=1 returned by an "authoritative" server | "Recursion availability" panel flags this zone red |
+| `healthy.demo.` | healthy | All status checks green; both NS records tables show identical hostnames; single SOA serial in the per-NS table |
+| `soa-serial-mismatch.demo.` | divergent SOA serials between primaries (100 vs 101) | SOA status row "All NSs report same SOA serial" = FAIL; SOA per-NS table shows two distinct serial values; Operator-section "SOA serials over time" line splits |
+| `missing-glue.demo.` | parent NS without A glue, hostname unresolvable | Delegation walk fails entirely; zone does NOT appear in the `$zone` selector (no `dnshealth_query_success` series exists for it — the absence is the signal) |
+| `lame-nameserver.demo.` | parent delegates to a CoreDNS forwarder that is not authoritative for the zone (originally intended as the "RA=1 advertised" demo, but CoreDNS's `forward` plugin doesn't reliably set RA — the visible failure is "auth NS returns no SOA") | NS status row "All NSs answered SOA authoritatively" = FAIL; "NS records — from the zone" panel is empty (no self response) |
+| `ns-mismatch.demo.` | parent advertises 1 NS hostname; the auth server reports 2 different hostnames internally | NS status row "Parent and self report same NS records" = FAIL; "NS records — from parent" shows `ns1.ns-mismatch.demo.`; "NS records — from the zone" shows `ns-internal-a` and `ns-internal-b` with empty Responded/Recursion (the exporter only probes parent-listed NSs) |
 
 After starting, allow one probe cycle (15 seconds) for data to appear.
 

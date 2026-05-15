@@ -176,6 +176,21 @@ Added in response to user review: prometheus scrape labels (`instance`, `job`) l
 
 ---
 
+## Phase 9: Records-table split + per-zone operator panels
+
+Added in response to user review of Phase 8: the unified "NS records — parent vs self" table conflated two distinct viewpoints in one panel and made it hard to read what each side reported. Operator-section time-series panels also showed all zones at once, which didn't follow the `$zone` selector.
+
+- [X] T065 Reverted Panel 5 to a simple "NS records — from parent" table showing only `dnshealth_ns_record{source="parent",zone="$zone"}`. Columns: Nameserver, Glue IP. Empty IP rendered as "(not provided)".
+- [X] T066 Rebuilt Panel 6 as "NS records — from the zone": outer-join of three queries — `dnshealth_ns_record{source="self",zone="$zone"}` (refId A), `dnshealth_query_success{check="soa",zone="$zone"}` (refId B), `dnshealth_ns_recursion_available{zone="$zone"}` (refId C) — joined on `nameserver`, then filtered with `filterByValue` `Value #A isNotNull` so only rows that exist in the self-side ns_record metric appear. Columns: Nameserver, IP, Responded, Recursion. For NSs only present on the self side (e.g. `ns-mismatch.demo.`'s `ns-internal-a/b`), Responded and Recursion cells are empty — the exporter only probes parent-listed NSs, so no probe data exists for self-only NSs. This is intentional and accurate.
+- [X] T067 Added `{zone="$zone"}` filter to the two operator-section time-series panels that have a per-zone interpretation: "SOA serials per nameserver over time" (id 103) and "Query duration (per check / nameserver)" (id 104). Panel titles now interpolate `${zone}` so the selected zone is visible. The other two operator panels (Probe cycle duration, Query rate / cache hit ratio) remain global because their underlying metrics have no `zone` label.
+- [X] T068 Bumped dashboard JSON `version` to 7. Verified end-to-end: `smoke.sh` exits 0; both Records panels render correctly across all four scrapeable zones (healthy, soa-serial-mismatch, lame-nameserver, ns-mismatch); operator panels follow the Zone selector.
+
+### Why two-table split rather than one-table parent-vs-self
+
+Phase 8 / T060 originally rendered a single "NS records — parent vs self" table with a `Source` column. User review found this hard to read for the common case (you wanted to see each side independently with its own probe-result columns where applicable). The two-table layout matches the intodns pattern more directly — left panel "what the parent said", right panel "what the zone said with response info" — at the cost of slightly more dashboard real estate.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

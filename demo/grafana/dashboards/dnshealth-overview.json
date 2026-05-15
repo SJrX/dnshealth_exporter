@@ -147,8 +147,8 @@
     {
       "id": 5,
       "type": "table",
-      "title": "Parent — NS records returned",
-      "description": "Each row is one NS record from the parent's referral. The IP column is the glue address the parent included; empty means the parent did not include glue (the exporter resolved the IP separately).",
+      "title": "NS records — from parent",
+      "description": "What the parent referral lists as the zone's NSs. Glue IP empty = parent did not include A glue (exporter resolved separately).",
       "gridPos": { "h": 10, "w": 8, "x": 0, "y": 12 },
       "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
       "targets": [
@@ -187,20 +187,27 @@
     {
       "id": 6,
       "type": "table",
-      "title": "NS — authoritative servers",
-      "description": "One row per nameserver the exporter probed for SOA. Responded = 1 means the NS answered authoritatively; 0 means SERVFAIL/timeout/no SOA. Recursion = 1 means the NS advertised RA, which is unusual for an authoritative server.",
+      "title": "NS records — from the zone",
+      "description": "What the auth servers themselves report as the zone's NSs (source=\"self\" rows from the glue prober), joined with each NS's probe response (Responded = SOA query succeeded, Recursion = RA flag set). Empty Responded/Recursion cells mean the exporter has no probe data for that NS — happens when the auth's self-reported NS list does not match what the parent advertised, since SOA/recursion checks only run against parent-listed NSs.",
       "gridPos": { "h": 10, "w": 8, "x": 8, "y": 12 },
       "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
       "targets": [
         {
           "refId": "A",
-          "expr": "dnshealth_query_success{check=\"soa\",zone=\"$zone\"}",
+          "expr": "dnshealth_ns_record{source=\"self\",zone=\"$zone\"}",
           "format": "table",
           "instant": true,
           "range": false
         },
         {
           "refId": "B",
+          "expr": "dnshealth_query_success{check=\"soa\",zone=\"$zone\"}",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
           "expr": "dnshealth_ns_recursion_available{zone=\"$zone\"}",
           "format": "table",
           "instant": true,
@@ -210,15 +217,30 @@
       "transformations": [
         { "id": "joinByField", "options": { "byField": "nameserver", "mode": "outer" } },
         {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              { "fieldName": "Value #A", "config": { "id": "isNotNull", "options": {} } }
+            ],
+            "type": "include",
+            "match": "all"
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time 1": true, "Time 2": true, "check": true, "zone 1": true, "zone 2": true,
-              "ip 2": true, "__name__ 1": true, "__name__ 2": true,
-              "instance 1": true, "instance 2": true, "job 1": true, "job 2": true
+              "Time 1": true, "Time 2": true, "Time 3": true,
+              "source 1": true, "check": true,
+              "zone 1": true, "zone 2": true, "zone 3": true,
+              "ip 2": true, "ip 3": true,
+              "instance 1": true, "instance 2": true, "instance 3": true,
+              "job 1": true, "job 2": true, "job 3": true,
+              "__name__ 1": true, "__name__ 2": true, "__name__ 3": true,
+              "Value #A": true
             },
-            "indexByName": { "nameserver": 0, "ip 1": 1, "Value #A": 2, "Value #B": 3 },
-            "renameByName": { "ip 1": "IP", "Value #A": "Responded", "Value #B": "Recursion" }
+            "indexByName": { "nameserver": 0, "ip 1": 1, "Value #B": 2, "Value #C": 3 },
+            "renameByName": { "ip 1": "IP", "Value #B": "Responded", "Value #C": "Recursion" }
           }
         }
       ],
@@ -350,12 +372,12 @@
         {
           "id": 103,
           "type": "timeseries",
-          "title": "SOA serials per (zone, nameserver) over time",
-          "description": "Each line is one (zone, nameserver). Lines for the same zone overlap when primaries agree; divergence appears as parallel non-overlapping lines.",
+          "title": "SOA serials per nameserver over time — ${zone}",
+          "description": "Each line is one nameserver for the selected zone. Lines overlap when primaries agree; divergence appears as parallel non-overlapping lines.",
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
           "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
           "targets": [
-            { "expr": "dnshealth_soa_serial", "legendFormat": "{{zone}} / {{nameserver}}", "refId": "A" }
+            { "expr": "dnshealth_soa_serial{zone=\"$zone\"}", "legendFormat": "{{nameserver}}", "refId": "A" }
           ],
           "fieldConfig": {
             "defaults": {
@@ -372,12 +394,12 @@
         {
           "id": 104,
           "type": "timeseries",
-          "title": "Query duration (per zone / check)",
-          "description": "dnshealth_query_duration_seconds — useful for spotting slow nameservers or check types.",
+          "title": "Query duration (per check / nameserver) — ${zone}",
+          "description": "dnshealth_query_duration_seconds for the selected zone — useful for spotting slow nameservers or check types.",
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
           "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
           "targets": [
-            { "expr": "dnshealth_query_duration_seconds", "legendFormat": "{{zone}} / {{check}} via {{nameserver}}", "refId": "A" }
+            { "expr": "dnshealth_query_duration_seconds{zone=\"$zone\"}", "legendFormat": "{{check}} via {{nameserver}}", "refId": "A" }
           ],
           "fieldConfig": {
             "defaults": { "unit": "s", "color": { "mode": "palette-classic" } },
@@ -423,6 +445,6 @@
   "timezone": "",
   "title": "DNS Health Overview",
   "uid": "dnshealth-overview",
-  "version": 5,
+  "version": 7,
   "weekStart": ""
 }

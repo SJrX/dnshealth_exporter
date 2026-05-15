@@ -53,29 +53,40 @@ IPs.
 
 ## R-2. CoreDNS topology for serving fake root, fake TLD, healthy and unhealthy demo zones.
 
-**Decision**: Five CoreDNS containers on a shared user-defined Docker
-network, each with a fixed IPv4 address inside that network so that the
-exporter's delegation walk reaches them deterministically:
+**Decision** (final, as of Phase 8): Six CoreDNS containers on a
+shared user-defined Docker network with fixed IPv4 addresses so the
+exporter's delegation walk reaches them deterministically. The
+original five-container plan was extended in Phase 8 with the
+`coredns-ns-mismatch` container; container names were also renamed to
+match descriptive zone names:
 
 | Container | Network alias | Role | Zones served |
 |---|---|---|---|
-| `coredns-root` | `coredns-root` | Fake root + fake TLD | `.`, `demo.` (with delegations to other coredns containers) |
-| `coredns-healthy` | `ns1.demo.`, `ns2.demo.` | Authoritative for healthy zone | `healthy.demo.` |
-| `coredns-broken-soa-a` | `ns1.broken-soa.demo.` | Authoritative primary, SOA serial=100 | `broken-soa.demo.` |
-| `coredns-broken-soa-b` | `ns2.broken-soa.demo.` | Authoritative secondary, SOA serial=101 | `broken-soa.demo.` |
-| `coredns-recursive` | `ns1.recursive.demo.` | Recursive resolver (no auth zones) | — (forwards/recurses; sets RA=1) |
+| `coredns-root` (172.31.0.10) | `coredns-root` | Fake root + fake TLD | `.`, `demo.` (delegations to all demo zones) |
+| `coredns-healthy` (172.31.0.11) | `ns1.healthy.demo.`, `ns2.healthy.demo.` | Authoritative for healthy zone | `healthy.demo.` |
+| `coredns-soa-serial-mismatch-a` (172.31.0.12) | `ns1.soa-serial-mismatch.demo.` | Authoritative primary, SOA serial=100 | `soa-serial-mismatch.demo.` |
+| `coredns-soa-serial-mismatch-b` (172.31.0.13) | `ns2.soa-serial-mismatch.demo.` | Authoritative secondary, SOA serial=101 | `soa-serial-mismatch.demo.` |
+| `coredns-lame-nameserver` (172.31.0.14) | `ns1.lame-nameserver.demo.` | Lame nameserver — parent delegates here but container is a CoreDNS forwarder, not authoritative for the zone | — (no auth zones; SOA queries return no answer, surfacing as `query_success{check="soa"}=0`) |
+| `coredns-ns-mismatch` (172.31.0.15) | `ns1.ns-mismatch.demo.` | Authoritative for `ns-mismatch.demo.` but reports DIFFERENT NS hostnames in its zone file than the parent advertised — exercises the glue prober's `source="self"` emission path | `ns-mismatch.demo.` |
 
 **Rationale**:
 
 - One root container is enough because the exporter walks `.` → `demo.`
   → target zone in two referrals; no need for an intermediate TLD
   container.
-- Two `broken-soa` containers are required to demonstrate divergent SOA
-  serials between primaries — that's a multi-source check by definition.
-- A separate recursive container demonstrates the "recursion" check
-  flagging RA=1 as an anomaly on a server that ought to be authoritative-
-  only. CoreDNS supports this with a single `forward` plugin entry in its
-  Corefile.
+- Two soa-serial-mismatch containers are required to demonstrate
+  divergent SOA serials between primaries — that's a multi-source check
+  by definition.
+- The lame-nameserver container was originally intended to demonstrate
+  RA=1 advertised by an "authoritative" server. CoreDNS's `forward`
+  plugin doesn't reliably set RA on referral responses without a real
+  recursive upstream (verified with `dig`). The container is still
+  useful — it demonstrates "auth NS that does not answer SOA
+  authoritatively", a real failure mode caught by the SOA check.
+- The ns-mismatch container (added in Phase 8 / T059) demonstrates a
+  parent-vs-self NS-record divergence, exercising the glue prober's
+  `source="self"` emission path that wasn't surfaced by any other
+  zone in the original catalogue.
 - Static container IPs in the Compose network let the root zone's NS+A
   glue records reference fixed addresses, which keeps the zone files
   human-readable and reproducible (SC-004).
@@ -99,15 +110,17 @@ exporter's delegation walk reaches them deterministically:
 
 ## R-3. Broken-zone catalog — which failure modes ship in v1?
 
-**Decision**: Three deliberately broken zones plus one healthy baseline,
-each chosen to exercise a different existing prober:
+**Decision** (final, as of Phase 8): Four deliberately broken zones
+plus one healthy baseline, each chosen to exercise a different
+existing prober or path through the glue prober:
 
-| Zone | Failure mode | Prober that flags it | Visible metric |
+| Zone | Failure mode | Prober / path that flags it | Visible signal |
 |---|---|---|---|
-| `healthy.demo.` | None (control case) | all probers | `dnshealth_query_success{zone="healthy.demo.",...}=1` for all checks |
-| `broken-soa.demo.` | Two primaries reporting different SOA serials (100 vs 101) | `soa` | `dnshealth_soa_serial` differs between `nameserver` labels |
-| `missing-glue.demo.` | Parent (`demo.`) lists `ns1.missing-glue.demo.` as NS but provides no A glue, and the hostname does not resolve | `glue` | Delegation walk fails; visible as missing/zero `dnshealth_query_success` for the zone |
-| `recursive.demo.` | Authoritative answer comes from a recursive resolver — SOA query succeeds but RA=1 in the response | `recursion` | `dnshealth_recursion_available{zone="recursive.demo.",...}=1` (anomaly) |
+| `healthy.demo.` | None (control case) | all probers | All `dnshealth_query_success` series = 1; both Records tables show identical NS hostnames; one SOA serial across NSs |
+| `soa-serial-mismatch.demo.` | Two primaries reporting different SOA serials (100 vs 101) | `soa` | `dnshealth_soa_serial` differs between `nameserver` labels; "All NSs report same SOA serial" status = FAIL |
+| `missing-glue.demo.` | Parent (`demo.`) lists `ns1.missing-glue.demo.` as NS but provides no A glue, and the hostname does not resolve | delegation walk in `prober/prober.go` | Delegation walk fails; zone produces no metrics at all → does not appear in dashboard `$zone` selector |
+| `lame-nameserver.demo.` (originally specced as `recursive.demo.` for "RA=1 advertised") | Parent delegates to a server that is not authoritative for the zone (CoreDNS forwarder; no zone file). The originally-spec'd RA=1 demonstration is not feasible — see R-2 rationale. | `soa` | `dnshealth_query_success{check="soa",...}=0`; "NS records — from the zone" panel empty (no self response) |
+| `ns-mismatch.demo.` (added in Phase 8 / T059) | Parent advertises one NS hostname; the auth server's zone file lists two different NS hostnames internally | `glue` (specifically the `source="self"` path of `prober.ProbeGlue`) | `dnshealth_ns_record{source="parent"}` and `{source="self"}` carry different `nameserver` label sets; "Parent and self report same NS records" status = FAIL; Records tables show the differing hostnames side-by-side |
 
 **Rationale**:
 
@@ -117,11 +130,15 @@ each chosen to exercise a different existing prober:
   not just one".
 - Each failure is a single, isolated misconfiguration so a viewer can
   attribute the failing dashboard panel to one zone and one root cause.
-- All four zones together fit in 5 CoreDNS containers and one root zone
-  file, keeping resource use low (per Scale/Scope in plan.md).
+- All five zones together fit in 6 CoreDNS containers and one root
+  zone file, keeping resource use low (per Scale/Scope in plan.md).
 - The `missing-glue.demo.` case is implemented purely in the root
   container's `demo.` zone file (NS record without glue) — no extra
   CoreDNS container needed for it.
+- The `ns-mismatch.demo.` zone surfaces the glue prober's
+  `source="self"` path that the original catalogue didn't exercise,
+  and is what makes the dashboard's "Parent and self report same NS
+  records" status check meaningful.
 
 **Alternatives considered**:
 

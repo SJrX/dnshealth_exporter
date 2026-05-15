@@ -1,0 +1,26 @@
+; Primary "B" for soa-serial-mismatch.demo. — SOA serial 101.
+; Differs from "A" by serial only (100 vs 101). The exporter's SOA
+; check surfaces this divergence as two distinct dnshealth_soa_serial
+; values for the same zone label.
+
+$ORIGIN soa-serial-mismatch.demo.
+$TTL 30
+
+@   IN  SOA  ns1.soa-serial-mismatch.demo. admin.soa-serial-mismatch.demo. (
+            101         ; serial — DELIBERATELY DIFFERENT from ns1
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.soa-serial-mismatch.demo.
+@     IN  NS   ns2.soa-serial-mismatch.demo.
+
+; Explicit A records for the in-bailiwick NS hostnames so the
+; exporter's glue prober (which does a self-side A lookup) finds them.
+ns1   IN  A    172.31.0.12
+ns2   IN  A    172.31.0.13
+
+@     IN  A    172.31.0.13
+www   IN  A    172.31.0.13

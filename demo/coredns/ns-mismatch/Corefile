@@ -1,0 +1,14 @@
+# Authoritative for ns-mismatch.demo. The container at this address
+# answers SOA + NS queries for the zone, but the NS records it returns
+# DO NOT match what the parent (demo. zone) advertised. The parent
+# delegates to ns1.ns-mismatch.demo., but this zone reports
+# ns-internal-a.ns-mismatch.demo. and ns-internal-b.ns-mismatch.demo.
+# as the authoritative NSs. The exporter's glue prober surfaces both
+# views (source="parent" vs source="self") so the dashboard can flag
+# the mismatch.
+
+ns-mismatch.demo. {
+    file /zones/ns-mismatch.demo.zone
+    log
+    errors
+}

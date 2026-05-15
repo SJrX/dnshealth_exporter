@@ -1,0 +1,428 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "DNS health report — ${zone}",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Per-zone health snapshot inspired by intodns.com. Use the **Zone** selector at the top to switch zones.\n\n**Top row** is boolean status checks — each row's Result renders `1` as **PASS** (green) and `0` as **FAIL** (red). **Middle row** is informational — the actual records / values returned by the queries, with no PASS/FAIL coloring. **Operator / debug views** at the bottom (collapsed) include `dnshealth_soa_serial` over time, probe cycle duration, query rate, cache hit ratio, and per-zone query duration.\n\n**Demo zones in this stack:** `healthy.demo.` (all checks pass), `soa-serial-mismatch.demo.` (SOA serial divergence between primaries), `lame-nameserver.demo.` (auth NS doesn't actually serve the zone), `ns-mismatch.demo.` (parent advertises 1 NS but auth reports 2 different NSs), `missing-glue.demo.` (parent NS without glue, delegation walk fails entirely — won't appear in the selector since it produces no `dnshealth_query_success` series; the absence is the signal)."
+      }
+    },
+
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Parent — status",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count by (zone) (dnshealth_ns_record{source=\"parent\",zone=\"$zone\"}) > bool 0) or on() vector(0)",
+          "legendFormat": "Parent has NS records for the zone",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        { "id": "reduce", "options": { "reducers": ["last"], "mode": "seriesToRows" } },
+        { "id": "organize", "options": { "renameByName": { "Field": "Test", "Last": "Result" }, "indexByName": { "Field": 0, "Last": 1 } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": false } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Test" }, "properties": [{ "id": "custom.width", "value": 260 }] },
+          {
+            "matcher": { "id": "byName", "options": "Result" },
+            "properties": [
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "FAIL", "color": "red", "index": 0 }, "1": { "text": "PASS", "color": "green", "index": 1 } } }] },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } }
+            ]
+          }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+
+    {
+      "id": 3,
+      "type": "table",
+      "title": "NS — status",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"})) >= bool 2) or on() vector(0)",
+          "legendFormat": "Multiple authoritative nameservers (>=2)",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "expr": "min by (zone) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"}) or on() vector(0)",
+          "legendFormat": "All NSs answered SOA authoritatively",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "C",
+          "expr": "(max by (zone) (dnshealth_ns_recursion_available{zone=\"$zone\"}) == bool 0) or on() vector(0)",
+          "legendFormat": "No NS advertises recursion (RA=0)",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "D",
+          "expr": "((count by (zone) (group by (zone, nameserver) (dnshealth_ns_record{source=\"parent\",zone=\"$zone\"}))) == bool (count by (zone) (group by (zone, nameserver) (dnshealth_ns_record{source=\"self\",zone=\"$zone\"})))) and on(zone) (count by (zone) (dnshealth_ns_record{source=\"self\",zone=\"$zone\"}) > bool 0) or on() vector(0)",
+          "legendFormat": "Parent and self report same NS records",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        { "id": "reduce", "options": { "reducers": ["last"], "mode": "seriesToRows" } },
+        { "id": "organize", "options": { "renameByName": { "Field": "Test", "Last": "Result" }, "indexByName": { "Field": 0, "Last": 1 } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": false } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Test" }, "properties": [{ "id": "custom.width", "value": 280 }] },
+          {
+            "matcher": { "id": "byName", "options": "Result" },
+            "properties": [
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "FAIL", "color": "red", "index": 0 }, "1": { "text": "PASS", "color": "green", "index": 1 } } }] },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } }
+            ]
+          }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+
+    {
+      "id": 4,
+      "type": "table",
+      "title": "SOA — status",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "((max by (zone) (dnshealth_soa_serial{zone=\"$zone\"}) - min by (zone) (dnshealth_soa_serial{zone=\"$zone\"})) == bool 0) and on(zone) (count by (zone) (dnshealth_soa_serial{zone=\"$zone\"}) > bool 0) or on() vector(0)",
+          "legendFormat": "All NSs report same SOA serial",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        { "id": "reduce", "options": { "reducers": ["last"], "mode": "seriesToRows" } },
+        { "id": "organize", "options": { "renameByName": { "Field": "Test", "Last": "Result" }, "indexByName": { "Field": 0, "Last": 1 } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": false } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Test" }, "properties": [{ "id": "custom.width", "value": 260 }] },
+          {
+            "matcher": { "id": "byName", "options": "Result" },
+            "properties": [
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "FAIL", "color": "red", "index": 0 }, "1": { "text": "PASS", "color": "green", "index": 1 } } }] },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } }
+            ]
+          }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Parent — NS records returned",
+      "description": "Each row is one NS record from the parent's referral. The IP column is the glue address the parent included; empty means the parent did not include glue (the exporter resolved the IP separately).",
+      "gridPos": { "h": 10, "w": 8, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "dnshealth_ns_record{source=\"parent\",zone=\"$zone\"}",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "source": true, "zone": true, "Value": true, "__name__": true, "instance": true, "job": true },
+            "indexByName": { "nameserver": 0, "ip": 1 },
+            "renameByName": { "nameserver": "Nameserver", "ip": "Glue IP" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": false } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Glue IP" },
+            "properties": [
+              { "id": "mappings", "value": [{ "type": "value", "options": { "": { "text": "(not provided)", "color": "text", "index": 0 } } }] }
+            ]
+          }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+
+    {
+      "id": 6,
+      "type": "table",
+      "title": "NS — authoritative servers",
+      "description": "One row per nameserver the exporter probed for SOA. Responded = 1 means the NS answered authoritatively; 0 means SERVFAIL/timeout/no SOA. Recursion = 1 means the NS advertised RA, which is unusual for an authoritative server.",
+      "gridPos": { "h": 10, "w": 8, "x": 8, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "dnshealth_query_success{check=\"soa\",zone=\"$zone\"}",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "refId": "B",
+          "expr": "dnshealth_ns_recursion_available{zone=\"$zone\"}",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "nameserver", "mode": "outer" } },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time 1": true, "Time 2": true, "check": true, "zone 1": true, "zone 2": true,
+              "ip 2": true, "__name__ 1": true, "__name__ 2": true,
+              "instance 1": true, "instance 2": true, "job 1": true, "job 2": true
+            },
+            "indexByName": { "nameserver": 0, "ip 1": 1, "Value #A": 2, "Value #B": 3 },
+            "renameByName": { "ip 1": "IP", "Value #A": "Responded", "Value #B": "Recursion" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": false } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Responded" },
+            "properties": [
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "no", "color": "red", "index": 0 }, "1": { "text": "yes", "color": "green", "index": 1 } } }] },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Recursion" },
+            "properties": [
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "no", "color": "green", "index": 0 }, "1": { "text": "RA=1", "color": "red", "index": 1 } } }] },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } }
+            ]
+          }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+
+    {
+      "id": 7,
+      "type": "table",
+      "title": "SOA — per-nameserver values",
+      "description": "One row per nameserver. Empty/missing rows mean the SOA query failed for that NS.",
+      "gridPos": { "h": 10, "w": 8, "x": 16, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "dnshealth_soa_serial{zone=\"$zone\"}",          "format": "table", "instant": true, "range": false },
+        { "refId": "B", "expr": "dnshealth_soa_refresh_seconds{zone=\"$zone\"}", "format": "table", "instant": true, "range": false },
+        { "refId": "C", "expr": "dnshealth_soa_retry_seconds{zone=\"$zone\"}",   "format": "table", "instant": true, "range": false },
+        { "refId": "D", "expr": "dnshealth_soa_expire_seconds{zone=\"$zone\"}",  "format": "table", "instant": true, "range": false },
+        { "refId": "E", "expr": "dnshealth_soa_minimum_seconds{zone=\"$zone\"}", "format": "table", "instant": true, "range": false }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "nameserver", "mode": "outer" } },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time 1": true, "Time 2": true, "Time 3": true, "Time 4": true, "Time 5": true,
+              "zone 1": true, "zone 2": true, "zone 3": true, "zone 4": true, "zone 5": true,
+              "ip 2": true, "ip 3": true, "ip 4": true, "ip 5": true,
+              "__name__ 1": true, "__name__ 2": true, "__name__ 3": true, "__name__ 4": true, "__name__ 5": true,
+              "instance 1": true, "instance 2": true, "instance 3": true, "instance 4": true, "instance 5": true,
+              "job 1": true, "job 2": true, "job 3": true, "job 4": true, "job 5": true
+            },
+            "indexByName": {
+              "nameserver": 0, "ip 1": 1,
+              "Value #A": 2, "Value #B": 3, "Value #C": 4, "Value #D": 5, "Value #E": 6
+            },
+            "renameByName": {
+              "ip 1": "IP",
+              "Value #A": "Serial",
+              "Value #B": "Refresh (s)",
+              "Value #C": "Retry (s)",
+              "Value #D": "Expire (s)",
+              "Value #E": "Min TTL (s)"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": false } },
+        "overrides": []
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Operator / debug views",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+      "panels": [
+        {
+          "id": 101,
+          "type": "timeseries",
+          "title": "Probe cycle duration",
+          "description": "Wall time of each probe cycle, from dnshealth_probe_cycle_duration_seconds.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+          "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+          "targets": [
+            { "expr": "dnshealth_probe_cycle_duration_seconds", "legendFormat": "cycle duration", "refId": "A" }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s", "color": { "mode": "palette-classic" } },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "single", "sort": "none" }
+          }
+        },
+        {
+          "id": 102,
+          "type": "timeseries",
+          "title": "Query rate and delegation cache hit ratio",
+          "description": "Left axis: per-server query rate. Cache ratio = hits / (hits + misses).",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+          "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+          "targets": [
+            { "expr": "rate(dnshealth_dns_queries_total[1m])", "legendFormat": "queries/s — {{server}}", "refId": "A" },
+            { "expr": "rate(dnshealth_delegation_cache_hits_total[5m]) / clamp_min((rate(dnshealth_delegation_cache_hits_total[5m]) + rate(dnshealth_delegation_cache_misses_total[5m])), 1e-9)", "legendFormat": "cache hit ratio", "refId": "B" }
+          ],
+          "fieldConfig": {
+            "defaults": { "color": { "mode": "palette-classic" } },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "cache hit ratio" },
+                "properties": [
+                  { "id": "unit", "value": "percentunit" },
+                  { "id": "custom.axisPlacement", "value": "right" }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["mean"] },
+            "tooltip": { "mode": "multi", "sort": "none" }
+          }
+        },
+        {
+          "id": 103,
+          "type": "timeseries",
+          "title": "SOA serials per (zone, nameserver) over time",
+          "description": "Each line is one (zone, nameserver). Lines for the same zone overlap when primaries agree; divergence appears as parallel non-overlapping lines.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+          "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+          "targets": [
+            { "expr": "dnshealth_soa_serial", "legendFormat": "{{zone}} / {{nameserver}}", "refId": "A" }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "lineInterpolation": "stepAfter", "showPoints": "always" }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["lastNotNull"] },
+            "tooltip": { "mode": "multi", "sort": "none" }
+          }
+        },
+        {
+          "id": 104,
+          "type": "timeseries",
+          "title": "Query duration (per zone / check)",
+          "description": "dnshealth_query_duration_seconds — useful for spotting slow nameservers or check types.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+          "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+          "targets": [
+            { "expr": "dnshealth_query_duration_seconds", "legendFormat": "{{zone}} / {{check}} via {{nameserver}}", "refId": "A" }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s", "color": { "mode": "palette-classic" } },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["max"] },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["dnshealth"],
+  "templating": {
+    "list": [
+      {
+        "name": "zone",
+        "label": "Zone",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "dnshealth-prometheus" },
+        "definition": "label_values(dnshealth_query_success, zone)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(dnshealth_query_success, zone)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": {},
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "DNS Health Overview",
+  "uid": "dnshealth-overview",
+  "version": 5,
+  "weekStart": ""
+}

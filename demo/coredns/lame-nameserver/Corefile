@@ -1,0 +1,11 @@
+# Recursive resolver — no authoritative zones. Forwards everything to
+# coredns-root, which means responses come back with the RA (Recursion
+# Available) flag set. The exporter's `recursion` check flags this as
+# an anomaly: an "authoritative" server should not advertise recursion.
+
+. {
+    forward . 172.31.0.10:53
+    cache 5
+    log
+    errors
+}

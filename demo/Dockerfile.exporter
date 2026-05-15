@@ -1,0 +1,21 @@
+# Build context: the repo root (..). Compose sets it that way so the
+# Dockerfile sees go.mod/go.sum and the full source tree.
+
+# Stage 1 — build the static binary.
+FROM golang:1.26 AS build
+WORKDIR /src
+
+# Cache module downloads on go.mod/go.sum changes only.
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /out/dnshealth_exporter .
+
+# Stage 2 — minimal runtime.
+FROM gcr.io/distroless/static:nonroot
+COPY --from=build /out/dnshealth_exporter /dnshealth_exporter
+USER nonroot:nonroot
+EXPOSE 9266
+ENTRYPOINT ["/dnshealth_exporter"]

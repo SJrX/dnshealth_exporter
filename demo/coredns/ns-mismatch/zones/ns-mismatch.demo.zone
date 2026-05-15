@@ -1,0 +1,36 @@
+; ns-mismatch.demo.
+;
+; The parent (demo.zone served by coredns-root) advertises ONE NS for
+; this zone: ns1.ns-mismatch.demo. with glue at 172.31.0.15.
+;
+; This zone file (served by the same container at 172.31.0.15) reports
+; TWO DIFFERENT NSs as the authoritative set: ns-internal-a and
+; ns-internal-b. Neither matches the parent's ns1.
+;
+; The exporter's glue prober queries each parent-listed NS for its own
+; view of the zone's NS records, emitting dnshealth_ns_record with
+; source="parent" vs source="self". The dashboard's NS status table
+; compares the counts and flags the mismatch.
+
+$ORIGIN ns-mismatch.demo.
+$TTL 30
+
+@   IN  SOA  ns-internal-a.ns-mismatch.demo. admin.ns-mismatch.demo. (
+            2026051501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+; Internally-claimed authoritative NSs — DELIBERATELY DIFFERENT from
+; what the parent advertised (parent says ns1; here we say
+; ns-internal-a + ns-internal-b).
+@                IN  NS  ns-internal-a.ns-mismatch.demo.
+@                IN  NS  ns-internal-b.ns-mismatch.demo.
+
+ns-internal-a    IN  A   172.31.0.15
+ns-internal-b    IN  A   172.31.0.15
+
+@                IN  A   172.31.0.15
+www              IN  A   172.31.0.15

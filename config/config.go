@@ -31,6 +31,13 @@ type Config struct {
 
 	// AddressOverrides maps an IP address to a host:port pair.
 	AddressOverrides map[string]string `yaml:"address_overrides"`
+
+	// RootServers, if non-empty, replaces the prober's hardcoded list of
+	// public root DNS server addresses for delegation walking. Used by
+	// the demo deployment to point delegation walks at an in-stack fake
+	// root so the demo runs offline. When empty, the prober's defaults
+	// are used. Each entry MUST be host:port form (e.g. "127.0.0.1:53").
+	RootServers []string `yaml:"root_servers"`
 }
 
 // ResolveAddress returns the address to query for a given

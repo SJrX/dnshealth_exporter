@@ -10,16 +10,23 @@ import (
 	"github.com/miekg/dns"
 )
 
-// RootServers is the list of root DNS server addresses to start
-// delegation walking from. Override in tests to point at the test
-// root fixture.
-var RootServers = []string{
+// DefaultRootServers is the canonical fallback list of public root DNS
+// server addresses. RootServers is initialized from this slice and is
+// restored to it on config reload when no override is configured.
+var DefaultRootServers = []string{
 	"198.41.0.4:53",     // a.root-servers.net
 	"170.247.170.2:53",  // b.root-servers.net
 	"192.33.4.12:53",    // c.root-servers.net
 	"199.7.91.13:53",    // d.root-servers.net
 	"192.203.230.10:53", // e.root-servers.net
 }
+
+// RootServers is the active list of root DNS server addresses used by
+// delegation walking. By default it equals DefaultRootServers.
+// main.go replaces it with config.RootServers at startup and on reload
+// when the operator configures an override; tests assign it directly
+// to point at in-process fake roots.
+var RootServers = DefaultRootServers
 
 // ResolveAddress maps a nameserver IP to the address to query.
 // In production, this appends :53. In tests or with config overrides,

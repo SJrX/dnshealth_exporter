@@ -1,4 +1,4 @@
-.PHONY: build test test-integration vet fmt clean
+.PHONY: build test test-integration vet fmt clean demo-smoke
 
 BINARY := dnshealth_exporter
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -28,3 +28,9 @@ fmt:
 
 clean:
 	rm -f $(BINARY)
+
+# Demo smoke test — brings the demo stack up, asserts expected /metrics
+# series for healthy and broken zones, then tears down. Requires Docker.
+# Standalone target — not invoked by `make` or `make test`.
+demo-smoke:
+	cd demo && ./smoke.sh

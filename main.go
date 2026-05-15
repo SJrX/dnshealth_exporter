@@ -196,7 +196,9 @@ func applyReloadedConfig(newCfg *config.Config, current *atomic.Pointer[config.C
 	if len(newCfg.RootServers) > 0 {
 		prober.RootServers = newCfg.RootServers
 	} else {
-		prober.RootServers = prober.DefaultRootServers
+		// Copy so callers cannot inadvertently mutate the canonical
+		// DefaultRootServers via the active RootServers slice.
+		prober.RootServers = append([]string(nil), prober.DefaultRootServers...)
 	}
 	delegationCache.Invalidate()
 }

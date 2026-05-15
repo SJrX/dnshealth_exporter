@@ -16,11 +16,13 @@ $TTL 30
 @   IN  NS   ns1.demo.
 @   IN  NS   ns2.demo.
 
-; Apex glue — both NS aliases point at the coredns-healthy container,
-; which is also authoritative for the apex of the `demo.` zone for the
-; purposes of the parent's referral. (The root zone serves the actual
-; `demo.` zone data; these glue records exist so the delegation walk
-; can reach the next hop deterministically.)
+; Apex glue. These A records make `ns1.demo.`/`ns2.demo.` resolvable
+; for completeness (a valid zone needs A records for its apex NSs),
+; but they are NOT exercised by the exporter's delegation walker:
+; the walker queries the root override (coredns-root) directly and
+; receives a single referral straight to each demo zone's auth NSs,
+; so it never separately resolves demo.'s apex NSs. The demo. zone
+; itself is served by coredns-root, not by coredns-healthy.
 ns1   IN  A    172.31.0.11
 ns2   IN  A    172.31.0.11
 

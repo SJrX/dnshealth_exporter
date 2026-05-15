@@ -434,7 +434,7 @@
         "sort": 1,
         "multi": false,
         "includeAll": false,
-        "current": {},
+        "current": { "text": "healthy.demo.", "value": "healthy.demo." },
         "hide": 0,
         "skipUrlSync": false
       }

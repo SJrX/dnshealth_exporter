@@ -10,7 +10,7 @@
 #   0  all assertions passed; teardown clean
 #   1  one or more assertions failed
 #   2  stack failed to come up within timeout
-#   3  teardown reported non-zero exit from any service
+#   3  exporter container did not exit with code 0 in response to SIGTERM
 #
 # Usage:
 #   cd demo && ./smoke.sh

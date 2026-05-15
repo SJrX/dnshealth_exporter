@@ -33,7 +33,10 @@ services:
     restart: unless-stopped
 
   # Authoritative for healthy.demo. Static IP 172.31.0.11 — matches
-  # ns1.demo./ns2.demo. glue in demo.zone.
+  # ns1.healthy.demo. / ns2.healthy.demo. glue in demo.zone (the
+  # healthy zone uses in-bailiwick NSs since Phase 8 / T061). The
+  # static IP is what makes the parent's glue records valid; no Docker
+  # DNS aliases are required.
   coredns-healthy:
     image: coredns/coredns:latest
     command: ["-conf", "/etc/coredns/Corefile"]
@@ -43,9 +46,6 @@ services:
     networks:
       demo:
         ipv4_address: 172.31.0.11
-        aliases:
-          - ns1.demo.
-          - ns2.demo.
     restart: unless-stopped
 
   # Primary A for soa-serial-mismatch.demo. (SOA serial 100). Static

@@ -1,7 +1,20 @@
-# Recursive resolver — no authoritative zones. Forwards everything to
-# coredns-root, which means responses come back with the RA (Recursion
-# Available) flag set. The exporter's `recursion` check flags this as
-# an anomaly: an "authoritative" server should not advertise recursion.
+# Lame nameserver for lame-nameserver.demo.
+#
+# The parent (demo. zone served by coredns-root) delegates this zone
+# to ns1.lame-nameserver.demo. — but this container does NOT serve
+# the zone authoritatively. It runs as a CoreDNS forwarder, so SOA
+# queries against it return no authoritative answer; the exporter
+# surfaces this as `dnshealth_query_success{check="soa",...}=0`.
+#
+# Originally specced as the "RA=1 advertised" demo (the recursion
+# check should flag a server that ought to be authoritative-only but
+# advertises recursion). That demo turned out to be infeasible with
+# pure CoreDNS — the `forward` plugin doesn't reliably set the RA
+# flag on referral responses without a real recursive upstream like
+# unbound. See specs/004-demo-deployment/audit.md deviations #3 and
+# #6 for the full reasoning. The "lame nameserver" failure mode this
+# container actually demonstrates is equally real and arguably more
+# common in the wild, so we kept it under a more honest name.
 
 . {
     forward . 172.31.0.10:53

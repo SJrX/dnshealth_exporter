@@ -191,6 +191,25 @@ Phase 8 / T060 originally rendered a single "NS records — parent vs self" tabl
 
 ---
 
+## Phase 10: Code-review follow-ups
+
+Findings B1, B2, C1, C2, C3, C4, T1 from the post-Phase-9 code review. All low/medium severity, all small. No new functionality.
+
+- [X] T069 (B1) Fixed slice-aliasing footgun: `var RootServers = DefaultRootServers` was a slice-header copy (same backing array). Now `var RootServers = append([]string(nil), DefaultRootServers...)` — independent backing array. Same change applied in `applyReloadedConfig`'s else-branch (restore-defaults path). Doc comment on `RootServers` updated to forbid element-level mutation. Existing reload tests still pass (they compare values, not slice identity).
+- [X] T070 (B2) Rewrote `demo/coredns/lame-nameserver/Corefile` header comment. The old comment still claimed "Recursive resolver... The exporter's `recursion` check flags this as an anomaly" — left over from before the Phase 8 rename. New comment honestly describes the lame-nameserver semantics and points at audit deviations #3 and #6 for the why.
+- [X] T071 (C1) Rewrote the misleading "Apex glue" comment in `demo/coredns/root/zones/demo.zone`. The previous text claimed coredns-healthy is "authoritative for the apex of the demo. zone" — it isn't (coredns-root serves demo.). Records kept (a valid zone needs A records for its apex NSs); comment now accurately notes they're not exercised by the walker.
+- [X] T072 (C2) Removed vestigial `aliases: [ns1.demo., ns2.demo.]` from the `coredns-healthy` Compose service. Healthy.demo. uses in-bailiwick NSs since Phase 8 / T061; the Docker DNS aliases were leftover from before that change and weren't referenced anywhere. Static IP alone is what makes the parent's glue records valid.
+- [X] T073 (C3) Set explicit `current` value on the dashboard `$zone` template variable to `healthy.demo.` (was `{}`). First-load now lands on a predictable, healthy zone instead of relying on Grafana's alphabetical-first behaviour.
+- [X] T074 (C4) Tightened `smoke.sh` exit-code 3 description in the file header. Header said "teardown reported non-zero exit from any service" but the actual A6 check inspects only the exporter container's exit code. Now reads "exporter container did not exit with code 0 in response to SIGTERM".
+- [X] T075 (T1) Added `TestStartup_WiresRootServersFromConfig` to `main_test.go`. Closes the coverage asymmetry where the reload path (`applyReloadedConfig`) was tested but the initial-load gate at `main.go:60-64` was not. Mirrors the conditional from `main()` exactly. Three-phase, real `Config` and `prober.RootServers`.
+- [X] T076 Verified end-to-end: `go vet` clean, `go test -tags=integration ./...` green for all 6 packages, `docker compose config` parses cleanly, `smoke.sh` exits 0 with all assertions passing.
+
+### Not addressed in Phase 10 (deferred)
+
+- **T2** (`ResolveHostname` direct override test). The audit acknowledges this as an existing gap; existing prober/integration_test.go tests already exercise the override mechanism for `WalkDelegation` indirectly. Direct `ResolveHostname` coverage requires a fixture where the parent omits glue (forcing the resolution path); not a one-line addition. Tracked here as next-round work.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

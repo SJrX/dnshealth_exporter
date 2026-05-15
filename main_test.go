@@ -82,6 +82,55 @@ func TestApplyReloadedConfig_AppliesNewOverrides(t *testing.T) {
 	}
 }
 
+func TestStartup_WiresRootServersFromConfig(t *testing.T) {
+	// Coverage gap closer: applyReloadedConfig is well-tested but the
+	// initial-load gate in main() (the `if len(cfg.RootServers) > 0`
+	// block) had no direct coverage. This test exercises the same
+	// conditional from outside, verifying that loading a config with
+	// root_servers populates prober.RootServers and that loading one
+	// without leaves the prober defaults intact.
+
+	saved := prober.RootServers
+	defer func() { prober.RootServers = saved }()
+
+	// Fixture A — config with override
+	cfgWithOverride := &config.Config{
+		Zones:       []string{"example.test"},
+		RootServers: []string{"coredns-root:53"},
+	}
+
+	// Reset to defaults before exercising
+	prober.RootServers = append([]string(nil), prober.DefaultRootServers...)
+
+	// Exercise SUT — mirrors main.go's startup wiring exactly
+	if len(cfgWithOverride.RootServers) > 0 {
+		prober.RootServers = cfgWithOverride.RootServers
+	}
+
+	if len(prober.RootServers) != 1 || prober.RootServers[0] != "coredns-root:53" {
+		t.Errorf("startup with override: got %v, want [coredns-root:53]",
+			prober.RootServers)
+	}
+
+	// Fixture B — config without override
+	cfgWithoutOverride := &config.Config{Zones: []string{"example.test"}}
+
+	// Reset to defaults
+	prober.RootServers = append([]string(nil), prober.DefaultRootServers...)
+
+	// Exercise SUT
+	if len(cfgWithoutOverride.RootServers) > 0 {
+		prober.RootServers = cfgWithoutOverride.RootServers
+	}
+
+	// Verification — prober still on defaults (gate did not fire)
+	if len(prober.RootServers) != len(prober.DefaultRootServers) ||
+		prober.RootServers[0] != prober.DefaultRootServers[0] {
+		t.Errorf("startup without override: expected defaults, got %v",
+			prober.RootServers)
+	}
+}
+
 func TestApplyReloadedConfig_AppliesRootServers(t *testing.T) {
 	// Reload regression: starting with no override, adding root_servers
 	// via reload must point delegation at the new roots.

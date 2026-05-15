@@ -22,11 +22,13 @@ var DefaultRootServers = []string{
 }
 
 // RootServers is the active list of root DNS server addresses used by
-// delegation walking. By default it equals DefaultRootServers.
-// main.go replaces it with config.RootServers at startup and on reload
-// when the operator configures an override; tests assign it directly
-// to point at in-process fake roots.
-var RootServers = DefaultRootServers
+// delegation walking. By default it is initialized to a copy of
+// DefaultRootServers (so that mutations to one slice do not affect the
+// other). main.go replaces it with config.RootServers at startup and
+// on reload when the operator configures an override; tests assign it
+// directly to point at in-process fake roots. Callers MUST always
+// reassign the whole slice — never mutate elements via index.
+var RootServers = append([]string(nil), DefaultRootServers...)
 
 // ResolveAddress maps a nameserver IP to the address to query.
 // In production, this appends :53. In tests or with config overrides,

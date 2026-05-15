@@ -1,0 +1,9 @@
+# Authoritative for healthy.demo. Both NS aliases (ns1.demo., ns2.demo.)
+# resolve to this container in the demo network — same answers from
+# either NS, which is the healthy case.
+
+healthy.demo. {
+    file /zones/healthy.demo.zone
+    log
+    errors
+}

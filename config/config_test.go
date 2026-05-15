@@ -128,6 +128,51 @@ zone_deadline: 45s
 	}
 }
 
+func TestLoad_RootServersOverride(t *testing.T) {
+	// Fixture Setup
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	os.WriteFile(path, []byte(`zones:
+  - example.com
+root_servers:
+  - coredns-root:53
+  - 127.0.0.1:5353
+`), 0644)
+
+	// Exercise SUT
+	cfg, err := Load(path)
+
+	// Verification
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.RootServers) != 2 {
+		t.Fatalf("expected 2 root servers, got %d", len(cfg.RootServers))
+	}
+	if cfg.RootServers[0] != "coredns-root:53" || cfg.RootServers[1] != "127.0.0.1:5353" {
+		t.Errorf("root_servers: got %v, want [coredns-root:53 127.0.0.1:5353]", cfg.RootServers)
+	}
+}
+
+func TestLoad_RootServersDefaultsEmpty(t *testing.T) {
+	// Fixture Setup — no root_servers field; field MUST be empty (not
+	// populated with defaults) so the prober keeps its own defaults.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	os.WriteFile(path, []byte("zones:\n  - example.com\n"), 0644)
+
+	// Exercise SUT
+	cfg, err := Load(path)
+
+	// Verification
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.RootServers) != 0 {
+		t.Errorf("expected empty root_servers when omitted, got %v", cfg.RootServers)
+	}
+}
+
 func TestLoad_InvalidDomainName(t *testing.T) {
 	// Fixture Setup
 	dir := t.TempDir()

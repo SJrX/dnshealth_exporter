@@ -1,0 +1,28 @@
+# Demo exporter configuration. The contract reference for this file
+# lives at specs/004-demo-deployment/contracts/exporter-config.yml.
+#
+# The demo runs entirely offline: `root_servers` points the delegation
+# walk at the in-stack fake root container instead of the public root.
+
+zones:
+  - healthy.demo.
+  - soa-serial-mismatch.demo.
+  - missing-glue.demo.
+  - lame-nameserver.demo.
+  - ns-mismatch.demo.
+
+# Tighter than the 60s production default so iteration sees changes
+# within ~20 seconds.
+probe_interval: 15s
+
+# Local-network queries are fast.
+query_timeout: 2s
+
+# Match the probe interval — no point letting one cycle's deadline
+# overrun the next cycle's start.
+zone_deadline: 15s
+
+# Offline root override. Resolves to the coredns-root container by
+# Docker DNS inside the demo network.
+root_servers:
+  - coredns-root:53

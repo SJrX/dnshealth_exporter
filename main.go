@@ -56,6 +56,13 @@ func main() {
 		logger.Info("Address overrides configured", "count", len(cfg.AddressOverrides))
 	}
 
+	// Wire up root server override from config (used by the demo
+	// deployment to walk delegation against an in-stack fake root).
+	if len(cfg.RootServers) > 0 {
+		prober.RootServers = cfg.RootServers
+		logger.Info("Root server override configured", "count", len(cfg.RootServers))
+	}
+
 	// Permanent registry for build info and operational counters
 	permanentRegistry := prometheus.NewRegistry()
 	buildInfo := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -179,12 +186,18 @@ func main() {
 }
 
 // applyReloadedConfig swaps in a freshly-loaded config: stores the
-// pointer, rebinds prober.ResolveAddress (unconditionally — removing
-// all overrides via reload must take effect), and invalidates the
-// delegation cache so the next cycle re-walks.
+// pointer, rebinds prober.ResolveAddress and prober.RootServers
+// (unconditionally — removing overrides via reload must take effect,
+// so when the new config has none we restore the prober defaults), and
+// invalidates the delegation cache so the next cycle re-walks.
 func applyReloadedConfig(newCfg *config.Config, current *atomic.Pointer[config.Config], delegationCache *cache.DelegationCache) {
 	current.Store(newCfg)
 	prober.ResolveAddress = newCfg.ResolveAddress
+	if len(newCfg.RootServers) > 0 {
+		prober.RootServers = newCfg.RootServers
+	} else {
+		prober.RootServers = prober.DefaultRootServers
+	}
 	delegationCache.Invalidate()
 }
 

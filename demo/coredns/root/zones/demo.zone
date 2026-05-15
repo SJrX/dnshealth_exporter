@@ -1,0 +1,58 @@
+; Fake `demo.` TLD zone. Delegates each demo zone to the CoreDNS
+; container that serves it. Glue records reference the static IPs
+; assigned in demo/docker-compose.yml.
+
+$ORIGIN demo.
+$TTL 30
+
+@   IN  SOA  ns1.demo. admin.demo. (
+            2026051501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@   IN  NS   ns1.demo.
+@   IN  NS   ns2.demo.
+
+; Apex glue — both NS aliases point at the coredns-healthy container,
+; which is also authoritative for the apex of the `demo.` zone for the
+; purposes of the parent's referral. (The root zone serves the actual
+; `demo.` zone data; these glue records exist so the delegation walk
+; can reach the next hop deterministically.)
+ns1   IN  A    172.31.0.11
+ns2   IN  A    172.31.0.11
+
+; --- Delegations to demo zones below ---
+
+; healthy.demo. — fully healthy zone with in-bailiwick NSs + glue.
+healthy                    IN  NS   ns1.healthy.demo.
+healthy                    IN  NS   ns2.healthy.demo.
+ns1.healthy                IN  A    172.31.0.11
+ns2.healthy                IN  A    172.31.0.11
+
+; soa-serial-mismatch.demo. — two primaries with divergent SOA
+; serials (100 vs 101). Glue at 172.31.0.12 / 172.31.0.13.
+soa-serial-mismatch        IN  NS   ns1.soa-serial-mismatch.demo.
+soa-serial-mismatch        IN  NS   ns2.soa-serial-mismatch.demo.
+ns1.soa-serial-mismatch    IN  A    172.31.0.12
+ns2.soa-serial-mismatch    IN  A    172.31.0.13
+
+; missing-glue.demo. — NS in-bailiwick, no glue. Resolution of the
+; NS hostname fails because nothing claims to be authoritative for
+; ns1.missing-glue.demo. and there is no glue.
+missing-glue               IN  NS   ns1.missing-glue.demo.
+
+; lame-nameserver.demo. — parent delegates to a server that does not
+; serve this zone authoritatively (it's a CoreDNS forwarder). The
+; SOA query fails, surfacing as query_success{check="soa"}=0.
+lame-nameserver            IN  NS   ns1.lame-nameserver.demo.
+ns1.lame-nameserver        IN  A    172.31.0.14
+
+; ns-mismatch.demo. — parent advertises ONE NS, but the auth server
+; reports TWO different NS hostnames internally. The exporter's glue
+; prober emits dnshealth_ns_record with source="parent" and
+; source="self" for direct comparison.
+ns-mismatch                IN  NS   ns1.ns-mismatch.demo.
+ns1.ns-mismatch            IN  A    172.31.0.15

@@ -1,0 +1,35 @@
+# Demo exporter configuration — contract reference for the demo deployment.
+#
+# This file is the canonical example of the exporter config the demo
+# ships with. The actual file used at runtime is
+# demo/exporter/dnshealth.yml; this copy lives under contracts/ so the
+# expected schema and values are visible during planning and review.
+#
+# Schema additions vs. production config:
+#   - root_servers: NEW optional field added in this feature. When set,
+#     overrides the hardcoded prober.RootServers default. When unset,
+#     the exporter behaves exactly as it does today.
+
+zones:
+  - healthy.demo.
+  - soa-serial-mismatch.demo.
+  - missing-glue.demo.
+  - lame-nameserver.demo.
+  - ns-mismatch.demo.
+
+# Tighter than the 60s production default so a code change becomes
+# visible within the SC-003 60-second budget.
+probe_interval: 15s
+
+# Local-network queries are fast; surfacing failure faster makes the
+# demo dashboard responsive.
+query_timeout: 2s
+
+# Match the probe interval — no point letting one cycle's deadline
+# overrun the next cycle's start.
+zone_deadline: 15s
+
+# Point delegation walks at the in-stack fake root container instead
+# of the public root servers. This is what lets the demo run offline.
+root_servers:
+  - coredns-root:53

@@ -82,6 +82,79 @@ func TestApplyReloadedConfig_AppliesNewOverrides(t *testing.T) {
 	}
 }
 
+func TestApplyReloadedConfig_AppliesRootServers(t *testing.T) {
+	// Reload regression: starting with no override, adding root_servers
+	// via reload must point delegation at the new roots.
+
+	// Restore prober.RootServers after the test so other tests in the
+	// package aren't affected.
+	saved := prober.RootServers
+	defer func() { prober.RootServers = saved }()
+
+	// Fixture Setup — initial config without an override; prober must
+	// be on its defaults.
+	oldCfg := &config.Config{Zones: []string{"example.test"}}
+	var current atomic.Pointer[config.Config]
+	delegationCache := cache.NewDelegationCache(30 * time.Minute)
+	applyReloadedConfig(oldCfg, &current, delegationCache)
+
+	if len(prober.RootServers) == 0 || prober.RootServers[0] != prober.DefaultRootServers[0] {
+		t.Fatalf("setup: expected defaults, got %v", prober.RootServers)
+	}
+
+	// Exercise SUT — operator adds an override and reloads
+	newCfg := &config.Config{
+		Zones:       []string{"example.test"},
+		RootServers: []string{"coredns-root:53"},
+	}
+	applyReloadedConfig(newCfg, &current, delegationCache)
+
+	// Verification — override is now active
+	if len(prober.RootServers) != 1 || prober.RootServers[0] != "coredns-root:53" {
+		t.Errorf("after reload adding root_servers: got %v, want [coredns-root:53]",
+			prober.RootServers)
+	}
+}
+
+func TestApplyReloadedConfig_ClearsRootServers(t *testing.T) {
+	// Reload regression: if an operator removes the root_servers
+	// override and reloads, the prober must fall back to the public
+	// root defaults — not silently keep the old override.
+
+	saved := prober.RootServers
+	defer func() { prober.RootServers = saved }()
+
+	// Fixture Setup — initial config with an override active
+	oldCfg := &config.Config{
+		Zones:       []string{"example.test"},
+		RootServers: []string{"coredns-root:53"},
+	}
+	var current atomic.Pointer[config.Config]
+	delegationCache := cache.NewDelegationCache(30 * time.Minute)
+	applyReloadedConfig(oldCfg, &current, delegationCache)
+
+	if prober.RootServers[0] != "coredns-root:53" {
+		t.Fatalf("setup: override not active: got %v", prober.RootServers)
+	}
+
+	// Exercise SUT — operator removes the override and reloads
+	newCfg := &config.Config{Zones: []string{"example.test"}}
+	applyReloadedConfig(newCfg, &current, delegationCache)
+
+	// Verification — defaults restored
+	if len(prober.RootServers) != len(prober.DefaultRootServers) {
+		t.Fatalf("after reload removing root_servers: got %d entries, want %d",
+			len(prober.RootServers), len(prober.DefaultRootServers))
+	}
+	for i, addr := range prober.DefaultRootServers {
+		if prober.RootServers[i] != addr {
+			t.Errorf("after reload removing root_servers: got %v, want defaults %v",
+				prober.RootServers, prober.DefaultRootServers)
+			break
+		}
+	}
+}
+
 func TestReload_AddsNewZone(t *testing.T) {
 	t.Skip("TODO: requires subprocess testing — start binary, write new config, send SIGHUP, verify new zone in metrics")
 }

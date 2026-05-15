@@ -1,0 +1,22 @@
+; Fake DNS root zone for the demo. Delegates `demo.` to ns1.root.
+; (the same container, since one CoreDNS process serves both zones).
+; Short TTLs so iteration doesn't get muddled by caching.
+
+$ORIGIN .
+$TTL 30
+
+@   IN  SOA  ns1.root. admin.root. (
+            2026051101  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@           IN  NS   ns1.root.
+ns1.root.   IN  A    172.31.0.10
+
+; Delegate the fake `demo.` TLD to the same container.
+demo.       IN  NS   ns1.root.
+; Glue for ns1.root. is provided by the A record above; CoreDNS will
+; include it in the additional section automatically.

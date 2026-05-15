@@ -1,0 +1,5 @@
+soa-serial-mismatch.demo. {
+    file /zones/soa-serial-mismatch.demo.zone
+    log
+    errors
+}

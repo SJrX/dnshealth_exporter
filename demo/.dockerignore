@@ -1,0 +1,29 @@
+# The build context for Dockerfile.exporter is the repo root (..).
+# Keep that context small so rebuilds are fast.
+
+# Spec / planning artifacts
+specs/
+
+# Local-only scratch
+steve-local/
+
+# Build outputs and test artifacts
+*.test
+*.out
+dnshealth_exporter
+dist/
+cache/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Demo's own files (the Dockerfile only needs the Go module — not the
+# Compose stack that wraps it)
+demo/

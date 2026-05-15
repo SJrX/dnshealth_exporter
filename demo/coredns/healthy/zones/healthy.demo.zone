@@ -1,0 +1,25 @@
+; A fully healthy demo zone. NSs are in-bailiwick (ns1.healthy.demo.,
+; ns2.healthy.demo.) so the parent provides A glue and the auth server
+; can return matching NS records for the self-side glue check. Single
+; container serves both NS aliases — SOA serials are trivially
+; consistent.
+
+$ORIGIN healthy.demo.
+$TTL 30
+
+@   IN  SOA  ns1.healthy.demo. admin.healthy.demo. (
+            2026051501  ; serial — single value across all queries
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.healthy.demo.
+@     IN  NS   ns2.healthy.demo.
+
+ns1   IN  A    172.31.0.11
+ns2   IN  A    172.31.0.11
+
+@     IN  A    172.31.0.11
+www   IN  A    172.31.0.11

@@ -1,0 +1,167 @@
+# dnshealth_exporter demo deployment.
+#
+# Bring up:    docker compose up -d --build
+# Stop/clean:  docker compose down -v
+# Override ports: copy .env.example to .env and edit.
+#
+# CoreDNS containers are NOT exposed on the host — they only need to be
+# reachable from the exporter container over the internal demo network.
+# This is what lets the demo run on hosts where port 53 is taken
+# (systemd-resolved, etc.).
+
+networks:
+  demo:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+
+services:
+  # The fake root + fake `demo.` TLD. Static IP 172.31.0.10 — must
+  # match the glue records in coredns/root/zones/*.zone.
+  coredns-root:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/root/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/root/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.10
+        aliases:
+          - ns1.root.
+    restart: unless-stopped
+
+  # Authoritative for healthy.demo. Static IP 172.31.0.11 — matches
+  # ns1.demo./ns2.demo. glue in demo.zone.
+  coredns-healthy:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/healthy/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/healthy/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.11
+        aliases:
+          - ns1.demo.
+          - ns2.demo.
+    restart: unless-stopped
+
+  # Primary A for soa-serial-mismatch.demo. (SOA serial 100). Static
+  # IP 172.31.0.12 matches ns1.soa-serial-mismatch.demo. glue.
+  coredns-soa-serial-mismatch-a:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/soa-serial-mismatch-a/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/soa-serial-mismatch-a/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.12
+        aliases:
+          - ns1.soa-serial-mismatch.demo.
+    restart: unless-stopped
+
+  # Primary B for soa-serial-mismatch.demo. (SOA serial 101). Static
+  # IP 172.31.0.13 matches ns2.soa-serial-mismatch.demo. glue.
+  coredns-soa-serial-mismatch-b:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/soa-serial-mismatch-b/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/soa-serial-mismatch-b/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.13
+        aliases:
+          - ns2.soa-serial-mismatch.demo.
+    restart: unless-stopped
+
+  # Lame nameserver for lame-nameserver.demo. — parent delegates here
+  # but this container does not authoritatively serve the zone. It's
+  # a CoreDNS forwarder; the SOA query fails.
+  coredns-lame-nameserver:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/lame-nameserver/Corefile:/etc/coredns/Corefile:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.14
+        aliases:
+          - ns1.lame-nameserver.demo.
+    depends_on:
+      - coredns-root
+    restart: unless-stopped
+
+  # Authoritative for ns-mismatch.demo. — this server returns NS
+  # records that DON'T match what the parent advertised.
+  coredns-ns-mismatch:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/ns-mismatch/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/ns-mismatch/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.15
+        aliases:
+          - ns1.ns-mismatch.demo.
+    restart: unless-stopped
+
+  exporter:
+    build:
+      context: ..
+      dockerfile: demo/Dockerfile.exporter
+    command:
+      - --config.file=/etc/dnshealth/dnshealth.yml
+      - --web.listen-address=:9266
+    volumes:
+      - ./exporter/dnshealth.yml:/etc/dnshealth/dnshealth.yml:ro
+    ports:
+      - "${EXPORTER_PORT:-9266}:9266"
+    networks:
+      - demo
+    depends_on:
+      - coredns-root
+      - coredns-healthy
+      - coredns-soa-serial-mismatch-a
+      - coredns-soa-serial-mismatch-b
+      - coredns-lame-nameserver
+      - coredns-ns-mismatch
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=1h
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - demo
+    depends_on:
+      - exporter
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Editor"
+      GF_USERS_DEFAULT_THEME: "light"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    networks:
+      - demo
+    depends_on:
+      - prometheus
+    restart: unless-stopped

@@ -1,0 +1,16 @@
+# The root container is authoritative for two zones:
+#   .      — the fake DNS root (delegates demo. to itself)
+#   demo.  — the fake demo TLD (delegates demo. zones to their auths)
+# Both are served on port 53 inside the demo network.
+
+. {
+    file /zones/root.zone
+    log
+    errors
+}
+
+demo. {
+    file /zones/demo.zone
+    log
+    errors
+}

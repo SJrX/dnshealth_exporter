@@ -13,6 +13,17 @@ Monitors DNS zones and exposes granular metrics for building Grafana dashboards 
 - **Detection, not policy** — the exporter exposes raw signals; thresholds, alerting rules, and SLA definitions belong in Grafana/Alertmanager.
 - **Explore Spec Kit** — this project is also an opportunity to practice and explore [Spec Kit](https://github.com/github/spec-kit), a spec-driven development toolkit for AI-assisted workflows. The `.specify/` directory contains the project's specifications, plans, and constitution generated through the Spec Kit process.
 
+## Try the demo
+
+The fastest way to see this exporter in action is the bundled Docker Compose demo. It brings up the exporter, Prometheus, Grafana with a pre-imported dashboard, and a small CoreDNS hierarchy serving deliberately healthy and broken zones — all behind one command:
+
+```bash
+cd demo
+docker compose up -d --build
+```
+
+Then open <http://localhost:3000> for the dashboard. See [`demo/README.md`](demo/README.md) for the full walkthrough, port-override workflow, iteration loops, and troubleshooting.
+
 ## Quick Start
 
 ### Prerequisites

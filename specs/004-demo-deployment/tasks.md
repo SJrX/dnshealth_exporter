@@ -171,7 +171,8 @@ Added in response to user review: prometheus scrape labels (`instance`, `job`) l
 
 ### Notes for next round
 
-- The glue prober's `source="self"` emission only runs for parent-listed NSs that have an IP. `cycle/runner.go` resolves missing IPs via `prober.ResolveHostname` for the SOA/recursion checks but `prober.ProbeGlue` itself iterates `delegation.NSRecords` directly, skipping IP-less entries — so self-side records are silently absent for zones whose parent doesn't include glue. This is a minor exporter quirk worth fixing properly (use the resolved `nameservers` slice in glue.go) but out of scope here per the "no new probers" constraint.
+- The glue prober's `source="self"` emission only runs for parent-listed NSs that have an IP. `cycle/runner.go` resolves missing IPs via `prober.ResolveHostname` for the SOA/recursion checks but `prober.ProbeGlue` itself iterates `delegation.NSRecords` directly, skipping IP-less entries — so self-side records are silently absent for zones whose parent doesn't include glue. Filed as **GitHub issue #14**.
+- Adding `demo/smoke.sh` to CI as a Compose-based regression check — deferred per merge-review judgment call (Docker-in-CI flake trade-off). Filed as **GitHub issue #15**.
 - Single-NS zone, zone with private-IP NSs, AS-diversity check — possible future demo zones if you want broader coverage; existing probers already capture the underlying signals.
 
 ---

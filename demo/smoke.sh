@@ -19,7 +19,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-EXPORTER_PORT="${EXPORTER_PORT:-9266}"
+EXPORTER_PORT="${EXPORTER_PORT:-9053}"
 METRICS_URL="http://localhost:${EXPORTER_PORT}/metrics"
 METRICS_FILE="$(mktemp -t dnshealth-smoke.metrics.XXXXXX)"
 trap 'rm -f "${METRICS_FILE}"' EXIT

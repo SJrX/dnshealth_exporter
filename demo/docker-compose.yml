@@ -120,7 +120,7 @@ services:
     volumes:
       - ./exporter/dnshealth.yml:/etc/dnshealth/dnshealth.yml:ro
     ports:
-      - "${EXPORTER_PORT:-9266}:9266"
+      - "${EXPORTER_PORT:-9053}:9266"
     networks:
       - demo
     depends_on:

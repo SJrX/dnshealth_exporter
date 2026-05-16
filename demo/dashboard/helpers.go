@@ -1,12 +1,28 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/grafana/grafana-foundation-sdk/go/dashboard"
 )
 
 // gridPos is a typo-friendly wrapper for the four-int GridPos literal.
 func gridPos(x, y, w, h uint32) dashboard.GridPos {
 	return dashboard.GridPos{X: x, Y: y, W: w, H: h}
+}
+
+// subY subtracts off from base for a panel's Y coord, panicking on
+// uint32 underflow rather than wrapping silently. Used by every panel
+// function to compute its Y position as `baseY - yOffset` (yOffset is
+// the layout-reflow shift applied when the info panel is removed).
+// Panic is the right failure mode here: silent wrap would produce a
+// dashboard with Y in the billions, which Grafana would render as
+// "off-screen" — invisible breakage.
+func subY(base, off uint32) uint32 {
+	if off > base {
+		panic(fmt.Sprintf("subY underflow: base=%d off=%d — a base Y must be >= every yOffset value passed by buildOverview", base, off))
+	}
+	return base - off
 }
 
 // passFailMappings is the standard 0/1 → FAIL/PASS color mapping used by
@@ -63,21 +79,8 @@ func cellOptionsColorBackground() any {
 	}
 }
 
-// tableDefaultsAutoAlign is the standard custom.{align,filterable}
-// fieldConfig.defaults block used by every table panel in v1.
-// We attach via OverrideByName / fieldConfig isn't directly exposed by
-// the SDK panel builder, so we inject this via the panel's defaults
-// when needed.
-//
-// In practice the SDK's CellHeight and ShowHeader cover the panel-
-// level options; the per-column "auto align / non-filterable" defaults
-// in v1 land in the panel's fieldConfig.defaults.custom map which the
-// SDK does not expose a typed setter for. They will appear in the
-// regenerated JSON only if Grafana auto-fills them. Acceptable
-// cosmetic drift — table behavior is unaffected.
-
-// emptyMapping: empty-string → "(not provided)" gray mapping used by
-// the "Glue IP" column of the NS records (from parent) table.
+// emptyGlueMapping: empty-string → "(not provided)" gray mapping used
+// by the "Glue IP" column of the NS records (from parent) table.
 func emptyGlueMapping() []any {
 	return []any{
 		map[string]any{

@@ -23,7 +23,7 @@ type statusCheck struct {
 func statusTable(title string, x, yOffset uint32, testColWidth float64, checks []statusCheck) *table.PanelBuilder {
 	b := table.NewPanelBuilder().
 		Title(title).
-		GridPos(gridPos(x, 4-yOffset, 8, 8)).
+		GridPos(gridPos(x, subY(4, yOffset), 8, 8)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).

@@ -11,11 +11,15 @@ import (
 	"github.com/grafana/grafana-foundation-sdk/go/dashboard"
 )
 
+// Transformation IDs as Grafana expects them in the JSON wire format.
+// Kept as constants (rather than inlined string literals) so a typo
+// in one transformation construction is local to the constructor and
+// doesn't silently spread.
 const (
-	TransformJoinByField   = "joinByField"
-	TransformOrganize      = "organize"
-	TransformFilterByValue = "filterByValue"
-	TransformReduce        = "reduce"
+	transformJoinByField   = "joinByField"
+	transformOrganize      = "organize"
+	transformFilterByValue = "filterByValue"
+	transformReduce        = "reduce"
 )
 
 // JoinByFieldOptions matches the joinByField transformation options
@@ -28,7 +32,7 @@ type JoinByFieldOptions struct {
 
 func JoinByField(opts JoinByFieldOptions) dashboard.DataTransformerConfig {
 	return dashboard.DataTransformerConfig{
-		Id:      TransformJoinByField,
+		Id:      transformJoinByField,
 		Options: opts,
 	}
 }
@@ -44,7 +48,7 @@ type OrganizeOptions struct {
 
 func Organize(opts OrganizeOptions) dashboard.DataTransformerConfig {
 	return dashboard.DataTransformerConfig{
-		Id:      TransformOrganize,
+		Id:      transformOrganize,
 		Options: opts,
 	}
 }
@@ -71,7 +75,7 @@ type FilterByValueOptions struct {
 
 func FilterByValue(opts FilterByValueOptions) dashboard.DataTransformerConfig {
 	return dashboard.DataTransformerConfig{
-		Id:      TransformFilterByValue,
+		Id:      transformFilterByValue,
 		Options: opts,
 	}
 }
@@ -86,7 +90,7 @@ type ReduceOptions struct {
 
 func Reduce(opts ReduceOptions) dashboard.DataTransformerConfig {
 	return dashboard.DataTransformerConfig{
-		Id:      TransformReduce,
+		Id:      transformReduce,
 		Options: opts,
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // Demo dashboard generator. Emits two Grafana dashboard JSON files from
@@ -37,6 +38,15 @@ var variants = []variant{
 }
 
 func main() {
+	// Sanity check: every output path is repo-root-relative, so we must
+	// be invoked from there. The Makefile target enforces this; a raw
+	// `go run` from elsewhere would silently write files to the wrong
+	// place. Fail loudly with a clear hint instead.
+	if _, err := os.Stat(filepath.Dir(variants[0].path)); err != nil {
+		panic(fmt.Errorf("output directory %q not found relative to cwd — run from repo root (e.g., `make dashboards`): %w",
+			filepath.Dir(variants[0].path), err))
+	}
+
 	for _, v := range variants {
 		d, err := buildOverview(v.uid, v.title, v.includeInfoText)
 		if err != nil {

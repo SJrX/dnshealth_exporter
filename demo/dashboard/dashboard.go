@@ -54,7 +54,7 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 	// Operator row — collapsed by default; contains four timeseries.
 	b = b.WithRow(dashboard.NewRowBuilder("Operator / debug views").
 		Collapsed(true).
-		GridPos(dashboard.GridPos{X: 0, Y: 22 - yOffset, W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(22, yOffset), W: 24, H: 1}).
 		WithPanel(probeCycleDurationTimeseries(yOffset)).
 		WithPanel(dnsQueryRateTimeseries(yOffset)).
 		WithPanel(soaSerialsTimeseries(yOffset)).

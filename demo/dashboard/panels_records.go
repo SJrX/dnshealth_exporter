@@ -13,7 +13,7 @@ func parentNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("NS records — from parent").
 		Description(`What the parent referral lists as the zone's NSs. Glue IP empty = parent did not include A glue (exporter resolved separately).`).
-		GridPos(gridPos(0, 12-yOffset, 8, 10)).
+		GridPos(gridPos(0, subY(12, yOffset), 8, 10)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).
@@ -57,7 +57,7 @@ func selfNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("NS records — from the zone").
 		Description(`What the auth servers themselves report as the zone's NSs (source="self" rows from the glue prober), joined with each NS's probe response (Responded = SOA query succeeded, Recursion = RA flag set). Empty Responded/Recursion cells mean the exporter has no probe data for that NS — happens when the auth's self-reported NS list does not match what the parent advertised, since SOA/recursion checks only run against parent-listed NSs.`).
-		GridPos(gridPos(8, 12-yOffset, 8, 10)).
+		GridPos(gridPos(8, subY(12, yOffset), 8, 10)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).
@@ -131,7 +131,7 @@ func soaSerialsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("SOA — per-nameserver values").
 		Description("One row per nameserver. Empty/missing rows mean the SOA query failed for that NS.").
-		GridPos(gridPos(16, 12-yOffset, 8, 10)).
+		GridPos(gridPos(16, subY(12, yOffset), 8, 10)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).

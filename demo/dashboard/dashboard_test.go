@@ -40,7 +40,6 @@ func TestDashboardJSONMatchesGenerator(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.uid, func(t *testing.T) {
 			// Exercise SUT — build and marshal exactly like main.go.
 			d, err := buildOverview(tc.uid, tc.title, tc.includeInfoText)
@@ -72,10 +71,11 @@ func TestDashboardJSONMatchesGenerator(t *testing.T) {
 }
 
 // repoRootFromTestFile walks up from this test file's location to the
-// repo root (identified by the presence of go.mod). Test runs from
+// repo root (verified by the presence of go.mod there). Test runs from
 // arbitrary cwd (go test sets cwd to the package dir), so we resolve
 // committed-file paths relative to the test file rather than relying
-// on $PWD.
+// on $PWD. If the test file is ever moved, the go.mod check fails
+// loudly so we can fix the path here.
 func repoRootFromTestFile(t *testing.T) string {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
@@ -83,5 +83,9 @@ func repoRootFromTestFile(t *testing.T) string {
 		t.Fatal("runtime.Caller(0) failed")
 	}
 	// thisFile is .../demo/dashboard/dashboard_test.go — repo root is two levels up.
-	return filepath.Join(filepath.Dir(thisFile), "..", "..")
+	root := filepath.Join(filepath.Dir(thisFile), "..", "..")
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		t.Fatalf("repoRootFromTestFile: expected go.mod at %s but: %v — has the test file moved?", root, err)
+	}
+	return root
 }

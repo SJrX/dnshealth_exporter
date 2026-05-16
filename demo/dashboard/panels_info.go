@@ -6,8 +6,8 @@ import (
 
 // infoTextPanel reproduces the markdown header panel from the v1
 // dashboard. Included only in the "full" variant; the "clean" variant
-// omits it (FR-008) and reflows the layout (see dashboard.go's
-// compactGridY helper).
+// omits it (FR-008) and reflows the layout via the yOffset parameter
+// threaded through every other panel function (see dashboard.go).
 func infoTextPanel() *text.PanelBuilder {
 	const content = "Per-zone health snapshot inspired by intodns.com. " +
 		"Use the **Zone** selector at the top to switch zones.\n\n" +
@@ -23,7 +23,7 @@ func infoTextPanel() *text.PanelBuilder {
 
 	return text.NewPanelBuilder().
 		Title("DNS health report — ${zone}").
-		GridPos(gridPos(0, 0, 24, 4)).
+		GridPos(gridPos(0, 0, 24, infoPanelHeight)).
 		Mode(text.TextModeMarkdown).
 		Content(content)
 }

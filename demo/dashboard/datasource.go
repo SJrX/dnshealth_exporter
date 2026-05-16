@@ -22,10 +22,11 @@ var prometheusDS = dashboard.DataSourceRef{
 // templating.list[0] entry.
 //
 // The pinned SDK version has no .Definition() builder method, so the
-// emitted JSON will omit the `definition` field present in v1. The
+// emitted JSON omits the `definition` field present in v1. The
 // `definition` field is a UI hint; the actual query lives in
 // `query.query` (set below via StringOrMap). Functional behaviour
-// preserved; cosmetic drift caught by the drift test in Phase 4.
+// preserved; gap documented in audit.md D3 (the drift test cannot
+// catch this since both committed and generated JSON omit it).
 func zoneVariable() *dashboard.QueryVariableBuilder {
 	const promQuery = "label_values(dnshealth_query_success, zone)"
 	return dashboard.NewQueryVariableBuilder("zone").

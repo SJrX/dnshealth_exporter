@@ -3,6 +3,10 @@ dnshealth_exporter
 *.exe
 *.test
 *.out
+# Stray binary produced if someone runs `go build ./demo/dashboard`
+# instead of the documented `make dashboards` / `go run`. Rooted so it
+# does not also ignore the demo/dashboard/ source directory.
+/dashboard
 
 # GoReleaser
 dist/

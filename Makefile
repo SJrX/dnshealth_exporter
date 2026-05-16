@@ -1,4 +1,4 @@
-.PHONY: build test test-integration vet fmt clean demo-smoke
+.PHONY: build test test-integration vet fmt clean demo-smoke dashboards
 
 BINARY := dnshealth_exporter
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -34,3 +34,9 @@ clean:
 # Standalone target — not invoked by `make` or `make test`.
 demo-smoke:
 	cd demo && ./smoke.sh
+
+# Regenerate the demo Grafana dashboard JSON files from typed Go source
+# (Grafana Foundation SDK). Writes both the full and clean variants.
+# See demo/dashboard/ and specs/005-dashboard-go-sdk/.
+dashboards:
+	go run ./demo/dashboard

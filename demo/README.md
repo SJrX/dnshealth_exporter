@@ -39,7 +39,7 @@ exporter — allow a few minutes. Subsequent runs start in well under
 | --- | --- |
 | <http://localhost:3000> | Grafana — the **DNS Health Overview** dashboard loads automatically with anonymous Editor access (no login). |
 | <http://localhost:9090> | Prometheus — useful for poking metric queries directly. |
-| <http://localhost:9266/metrics> | The exporter's `/metrics` endpoint — useful for grepping series. |
+| <http://localhost:9053/metrics> | The exporter's `/metrics` endpoint — useful for grepping series. |
 
 After the stack is up, allow one probe cycle (~15 seconds) for data
 to appear.
@@ -56,8 +56,22 @@ to appear.
 
 ## Override host ports
 
-Copy `.env.example` to `.env` and edit any value that conflicts with
-something already running on your host:
+The demo defaults:
+
+| Service | Default host port | Override env var | Container port |
+| --- | --- | --- | --- |
+| Grafana | `3000` | `GRAFANA_PORT` | `3000` |
+| Prometheus | `9090` | `PROMETHEUS_PORT` | `9090` |
+| Exporter | `9053` | `EXPORTER_PORT` | `9266` |
+
+The exporter's *demo* default is `9053` (DNS-themed, sits in the
+conventional Prometheus `9xxx` exporter range) — distinct from the
+production `dnshealth_exporter` default of `9266`, so running the demo
+on a workstation that already has the production exporter bound to
+`9266` does not collide.
+
+To override, copy `.env.example` to `.env` and edit any value that
+conflicts with something already running on your host:
 
 ```sh
 cp .env.example .env
@@ -91,20 +105,44 @@ Only the `exporter` container is rebuilt and restarted. Prometheus,
 Grafana, and the CoreDNS containers keep running. New metrics appear
 within ~20 seconds (one probe cycle plus a scrape interval).
 
-## Iterate on the dashboard
+## Iterate on the dashboard (typed Go source)
 
-The dashboard JSON at `demo/grafana/dashboards/dnshealth-overview.json`
-is the source of truth — it is mounted read-only into Grafana. UI
-edits are reverted on restart. To persist a change:
+The dashboards are generated from typed Go source under
+[`demo/dashboard/`](dashboard/) using the
+[Grafana Foundation SDK](https://github.com/grafana/grafana-foundation-sdk).
+Two variants are emitted from one shared builder:
 
-1. Open the dashboard in Grafana, click the gear icon, edit panels.
-2. **Share → Export → Save to file**.
-3. Replace `demo/grafana/dashboards/dnshealth-overview.json` with the
-   downloaded file.
-4. Commit.
+| File | Variant | Purpose |
+| --- | --- | --- |
+| `demo/grafana/dashboards/dnshealth-overview.json` | full | demo dashboard with the markdown info-text header |
+| `demo/grafana/dashboards/dnshealth-overview-clean.json` | clean | same dashboard minus the markdown header, for embedding in your own Grafana without the demo narration |
 
-Grafana re-reads the JSON every 10 seconds, so a fresh `cp` over the
-file shows up without a restart.
+Both JSON files are committed — operators do **not** need Go installed
+to run the demo. The committed JSON is the artifact Grafana provisions
+from.
+
+### Edit a panel
+
+1. Edit a panel function in `demo/dashboard/panels_*.go` (one file per
+   category: info / status / records / operator).
+2. From repo root: `make dashboards` (regenerates both JSON files).
+3. Grafana re-reads the dashboards directory every 10 seconds, so a
+   freshly-regenerated JSON shows up without a restart.
+4. Commit the Go change *and* the regenerated JSON together.
+
+### Drift test
+
+A `go test` golden-file check enforces that the committed JSON matches
+the typed source:
+
+```sh
+go test -tags=integration ./demo/dashboard/...
+```
+
+If it fails with `dashboard JSON drifted from generator source`,
+someone edited the JSON by hand (or edited the Go source without
+running `make dashboards`). The fix is the same either way: run
+`make dashboards` and commit.
 
 ## Iterate on demo zones
 
@@ -121,7 +159,7 @@ docker compose restart coredns-healthy
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| `bind: address already in use` on `up` | Host port conflict on 3000/9090/9266 | Copy `.env.example` to `.env`, change the port, retry |
+| `bind: address already in use` on `up` | Host port conflict on 3000/9090/9053 | Copy `.env.example` to `.env`, change the port, retry |
 | Dashboard panels say "No data" | Less than one probe cycle (~15s) has elapsed | Wait and refresh |
 | Still "No data" after a minute | Exporter container failed | `docker compose logs exporter` |
 | Metrics for a zone are missing entirely | Delegation walk failed for that zone | `docker compose logs coredns-root` |

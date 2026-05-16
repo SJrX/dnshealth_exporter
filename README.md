@@ -22,7 +22,7 @@ cd demo
 docker compose up -d --build
 ```
 
-Then open <http://localhost:3000> for the dashboard. See [`demo/README.md`](demo/README.md) for the full walkthrough, port-override workflow, iteration loops, and troubleshooting.
+Then open <http://localhost:3000> for the dashboard. See [`demo/README.md`](demo/README.md) for the full walkthrough, port-override workflow, iteration loops, and troubleshooting. Maintainers regenerating the dashboard from typed Go source: `make dashboards` from repo root — see [`demo/README.md#iterate-on-the-dashboard-typed-go-source`](demo/README.md#iterate-on-the-dashboard-typed-go-source) for the full loop.
 
 ## Quick Start
 

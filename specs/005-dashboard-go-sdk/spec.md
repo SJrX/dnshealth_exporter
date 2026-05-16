@@ -162,11 +162,10 @@ binds the demo exporter to `9999` instead.
 - **FR-005**: The generated JSON files MUST be written to
   `demo/grafana/dashboards/dnshealth-overview.json` (full variant)
   and `demo/grafana/dashboards/dnshealth-overview-clean.json` (no-
-  info-text variant). Grafana provisioning is configured to load
-  every JSON file in that directory, so both variants appear as
-  separate dashboards in the demo Grafana without provisioning
-  changes (provisioning config update may still be needed if it
-  references a single file by name).
+  info-text variant). Grafana provisioning is directory-based
+  (`demo/grafana/provisioning/dashboards/dashboards.yml` points at
+  `/var/lib/grafana/dashboards`), so both variants appear as
+  separate dashboards with no provisioning config changes.
 - **FR-006**: The committed JSON MUST be the artifact of record:
   operators running the demo MUST NOT need to install the dashboard
   SDK toolchain to bring the stack up.
@@ -190,9 +189,11 @@ binds the demo exporter to `9999` instead.
     who want to embed the dashboard in their own context without the
     demo-specific narration.
   Both variants MUST be generated from the same shared panel
-  definitions (no copy-paste); the only difference is the presence
-  or absence of the markdown info panel and any layout reflow that
-  removal entails.
+  definitions (no copy-paste); the only differences are: (a) the
+  presence or absence of the markdown info panel, and (b) when the
+  info panel is removed (clean variant), all remaining panels' grid
+  positions MUST shift up by the info panel's height so the clean
+  variant does not display an empty band at the top.
 - **FR-009**: The generated dashboard MUST preserve the `$zone`
   templating variable, with the same default value (`healthy.demo.`)
   and the same query-driven option list.
@@ -250,12 +251,19 @@ binds the demo exporter to `9999` instead.
 ### Measurable Outcomes
 
 - **SC-001**: A panel rename (single field change) produces a diff
-  in the typed source under 5 lines. The corresponding regenerated
-  JSON diff is similarly localised — no churn outside the affected
-  panel block.
-- **SC-002**: A misspelled metric name or label in the typed source
-  is caught at build time (build fails / generation fails), not at
-  Grafana render time.
+  in the typed source of a few lines, confined to one panel function.
+  The corresponding regenerated JSON diff is similarly localised —
+  no churn outside the affected panel block (verified by visual
+  inspection during code review; not a CI gate).
+- **SC-002**: Misspellings in *transformation field names* are caught
+  at Go build time (the typed `JoinByFieldOptions` etc. helpers from
+  data-model Entity 4 fail to compile if a field is renamed or typoed).
+  Misspellings in *PromQL metric/label names* surface at the next demo
+  smoke run (the smoke test asserts on metric series; dashboards
+  referencing a non-existent metric show empty panels). They do NOT
+  reach production unnoticed: either the smoke test fails on the
+  underlying assertion, or the empty-panel state is visible during
+  the demo bring-up before merge.
 - **SC-003**: A first-time contributor can find and run the
   dashboard regeneration command from the demo README in under
   2 minutes.
@@ -266,11 +274,11 @@ binds the demo exporter to `9999` instead.
   bring up the demo using the documented start command without an
   exporter port conflict, because the demo exporter defaults to
   `9053`.
-- **SC-007**: An operator can find the override env-var name for any
-  of the three demo services in the demo README in under 60 seconds.
 - **SC-006**: Regenerating the dashboards twice in a row, with no
   source changes between runs, produces byte-identical JSON files
   both times (for both variants).
+- **SC-007**: An operator can find the override env-var name for any
+  of the three demo services in the demo README in under 60 seconds.
 - **SC-008**: A user who only wants the dashboard without the demo
   narration imports `dnshealth-overview-clean.json` into their own
   Grafana and sees identical panel behaviour to the demo Grafana's

@@ -44,14 +44,18 @@ func ProbeGlue(ctx context.Context, zone string, nameservers []Nameserver, deleg
 		})
 	}
 
-	// Self-query each authoritative NS
+	// Self-query each authoritative NS. Iterate `nameservers` (the
+	// resolved slice the caller built) rather than delegation.NSRecords:
+	// when the parent referral does not include A glue (out-of-bailiwick
+	// NSs are the common case), delegation.NSRecords entries have
+	// IP=="", but the caller has already resolved those hostnames via
+	// ResolveHostname and added them to `nameservers`. Iterating the
+	// resolved slice means the self-side check runs against every NS
+	// the exporter can reach, not just the ones the parent happened to
+	// hand us glue for. Fixes #14.
 	registered := make(map[string]bool)
 
-	for _, ns := range delegation.NSRecords {
-		if ns.IP == "" {
-			continue
-		}
-
+	for _, ns := range nameservers {
 		selfNS, selfGlue, err := querySelfForNSAndA(ctx, zone, ns, client, logger)
 		if err != nil {
 			logger.Warn("glue: could not query NS for self records",

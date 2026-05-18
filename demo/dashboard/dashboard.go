@@ -13,14 +13,15 @@ import (
 const infoPanelHeight uint32 = 4
 
 // buildOverview is the single shared builder used to emit BOTH dashboard
-// variants. The only per-variant branches are:
+// variants (default + demo). The only per-variant branches are:
 //
-//   - whether the markdown header panel is included
-//   - the yOffset passed to every other panel function (0 for the full
-//     variant, infoPanelHeight for the clean variant)
+//   - whether the markdown header panel is included (demo only)
+//   - the yOffset passed to every other panel function (infoPanelHeight
+//     for the default variant to compact upward, 0 for the demo
+//     variant since the header occupies the top rows)
 //
 // Every panel function below is called exactly once. There are no
-// parallel panel chains for "full" vs "clean" — adding a panel touches
+// parallel panel chains for default vs demo — adding a panel touches
 // one place. See specs/005-dashboard-go-sdk/research.md R-5 and FR-008.
 func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard, error) {
 	var yOffset uint32

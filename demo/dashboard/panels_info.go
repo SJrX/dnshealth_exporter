@@ -5,9 +5,10 @@ import (
 )
 
 // infoTextPanel reproduces the markdown header panel from the v1
-// dashboard. Included only in the "full" variant; the "clean" variant
-// omits it (FR-008) and reflows the layout via the yOffset parameter
-// threaded through every other panel function (see dashboard.go).
+// dashboard. Included only in the "demo" variant; the "default"
+// variant omits it (FR-008) and reflows the layout via the yOffset
+// parameter threaded through every other panel function (see
+// dashboard.go).
 func infoTextPanel() *text.PanelBuilder {
 	const content = "Per-zone health snapshot inspired by intodns.com. " +
 		"Use the **Zone** selector at the top to switch zones.\n\n" +

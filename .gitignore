@@ -3,6 +3,11 @@ dnshealth_exporter
 *.exe
 *.test
 *.out
+# Cross-compiled / platform-suffixed binaries (e.g.,
+# dnshealth_exporter_linux_arm64). Anchored to repo root so a future
+# Go file named dnshealth_exporter_*.go in any sub-package wouldn't
+# get accidentally ignored.
+/dnshealth_exporter_*
 # Stray binary produced if someone runs `go build ./demo/dashboard`
 # instead of the documented `make dashboards` / `go run`. Rooted so it
 # does not also ignore the demo/dashboard/ source directory.

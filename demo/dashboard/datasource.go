@@ -6,15 +6,36 @@ import (
 )
 
 // prometheusDS is the datasource ref used by every panel and by the
-// $zone template variable. The uid matches
-// demo/grafana/provisioning/datasources/datasources.yml.
+// $zone template variable. The uid is a Grafana datasource template
+// variable reference (${prometheus}, declared by dsVariable below)
+// rather than a hardcoded uid, so the dashboard works both in the
+// demo (auto-resolves to the demo's provisioned datasource since
+// there's only one Prometheus available) and when imported into any
+// other Grafana (Grafana prompts the user to pick a Prometheus, or
+// auto-selects if they only have one). Fixes #18.
 //
 // Note: the pinned SDK version exposes DataSourceRef under the
 // dashboard package (not common); confirmed against the module cache
 // during Phase 2 implementation.
 var prometheusDS = dashboard.DataSourceRef{
 	Type: cog.ToPtr("prometheus"),
-	Uid:  cog.ToPtr("dnshealth-prometheus"),
+	Uid:  cog.ToPtr("${prometheus}"),
+}
+
+// dsVariable returns the dashboard's datasource template variable.
+// Conventionally named "prometheus" so panels reference it as
+// `${prometheus}`. Filtered by Regex to only allow Prometheus
+// datasources (the dashboard's panels only make sense against a
+// Prometheus datasource).
+//
+// In the demo stack there's exactly one Prometheus, so Grafana
+// auto-resolves on dashboard load with no UI prompt. When the
+// dashboard is imported into a Grafana with multiple datasources,
+// Grafana shows a picker on first load.
+func dsVariable() *dashboard.DatasourceVariableBuilder {
+	return dashboard.NewDatasourceVariableBuilder("prometheus").
+		Label("Prometheus").
+		Type("prometheus")
 }
 
 // zoneVariable returns the $zone template variable, query-driven from

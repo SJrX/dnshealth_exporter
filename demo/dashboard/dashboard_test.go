@@ -34,9 +34,9 @@ func TestDashboardJSONMatchesGenerator(t *testing.T) {
 		includeInfoText bool
 	}{
 		{"dnshealth-overview", "DNS Health Overview",
-			"demo/grafana/dashboards/dnshealth-overview.json", true},
-		{"dnshealth-overview-clean", "DNS Health Overview (clean)",
-			"demo/grafana/dashboards/dnshealth-overview-clean.json", false},
+			"demo/grafana/dashboards/dnshealth-overview.json", false},
+		{"dnshealth-overview-demo", "DNS Health Overview (demo)",
+			"demo/grafana/dashboards/dnshealth-overview-demo.json", true},
 	}
 
 	for _, tc := range cases {

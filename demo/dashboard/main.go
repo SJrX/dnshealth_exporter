@@ -24,16 +24,24 @@ type variant struct {
 
 var variants = []variant{
 	{
+		// Default variant — no demo-specific markdown header. This is
+		// what any real deployment should import. Demo Grafana also
+		// loads it; the demo-specific narration lives in the -demo
+		// variant below.
 		uid:             "dnshealth-overview",
 		title:           "DNS Health Overview",
 		path:            "demo/grafana/dashboards/dnshealth-overview.json",
-		includeInfoText: true,
+		includeInfoText: false,
 	},
 	{
-		uid:             "dnshealth-overview-clean",
-		title:           "DNS Health Overview (clean)",
-		path:            "demo/grafana/dashboards/dnshealth-overview-clean.json",
-		includeInfoText: false,
+		// Demo variant — adds a markdown header describing the demo
+		// zones (healthy.demo., soa-serial-mismatch.demo., etc.) and
+		// what each row of the dashboard means in the demo context.
+		// Only meaningful inside the bundled demo stack.
+		uid:             "dnshealth-overview-demo",
+		title:           "DNS Health Overview (demo)",
+		path:            "demo/grafana/dashboards/dnshealth-overview-demo.json",
+		includeInfoText: true,
 	},
 }
 

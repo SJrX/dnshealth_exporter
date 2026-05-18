@@ -114,8 +114,8 @@ Two variants are emitted from one shared builder:
 
 | File | Variant | Purpose |
 | --- | --- | --- |
-| `demo/grafana/dashboards/dnshealth-overview.json` | full | demo dashboard with the markdown info-text header |
-| `demo/grafana/dashboards/dnshealth-overview-clean.json` | clean | same dashboard minus the markdown header, for embedding in your own Grafana without the demo narration |
+| `demo/grafana/dashboards/dnshealth-overview.json` | default | the dashboard intended for general use — import into any Grafana with a Prometheus datasource and it just works |
+| `demo/grafana/dashboards/dnshealth-overview-demo.json` | demo | same dashboard plus a markdown header describing the demo zones (`healthy.demo.`, `soa-serial-mismatch.demo.`, etc.) — only useful inside this bundled demo stack |
 
 Both JSON files are committed — operators do **not** need Go installed
 to run the demo. The committed JSON is the artifact Grafana provisions

@@ -20,7 +20,7 @@ type statusCheck struct {
 	refId, expr, legendFormat string
 }
 
-func statusTable(title string, x, yOffset uint32, testColWidth float64, checks []statusCheck) *table.PanelBuilder {
+func statusTable(title string, x, yOffset uint32, checks []statusCheck) *table.PanelBuilder {
 	b := table.NewPanelBuilder().
 		Title(title).
 		GridPos(gridPos(x, subY(4, yOffset), 8, 8)).
@@ -35,12 +35,14 @@ func statusTable(title string, x, yOffset uint32, testColWidth float64, checks [
 			RenameByName: map[string]string{"Field": "Test", "Last": "Result"},
 			IndexByName:  map[string]int{"Field": 0, "Last": 1},
 		})).
-		OverrideByName("Test", []dashboard.DynamicConfigValue{
-			{Id: "custom.width", Value: testColWidth},
-		}).
+		// Test column gets no width override so it auto-expands to
+		// fill whatever space the panel allows — the test descriptions
+		// are long enough that fixed widths kept truncating them.
 		OverrideByName("Result", []dashboard.DynamicConfigValue{
 			{Id: "mappings", Value: passFailMappings()},
 			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
+			// Narrow column — only ever holds "PASS" or "FAIL".
+			{Id: "custom.width", Value: 80},
 		})
 
 	for _, c := range checks {
@@ -54,7 +56,7 @@ func statusTable(title string, x, yOffset uint32, testColWidth float64, checks [
 }
 
 func parentStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("Parent — status", 0, yOffset, 260, []statusCheck{
+	return statusTable("Parent — status", 0, yOffset, []statusCheck{
 		{"A",
 			`(count by (zone) (dnshealth_ns_record{source="parent",zone="$zone"}) > bool 0) or on() vector(0)`,
 			"Parent has NS records for the zone"},
@@ -62,7 +64,7 @@ func parentStatusTable(yOffset uint32) *table.PanelBuilder {
 }
 
 func nsStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("NS — status", 8, yOffset, 280, []statusCheck{
+	return statusTable("NS — status", 8, yOffset, []statusCheck{
 		{"A",
 			`(count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check="soa",zone="$zone"})) >= bool 2) or on() vector(0)`,
 			"Multiple authoritative nameservers (>=2)"},
@@ -79,7 +81,7 @@ func nsStatusTable(yOffset uint32) *table.PanelBuilder {
 }
 
 func soaStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("SOA — status", 16, yOffset, 260, []statusCheck{
+	return statusTable("SOA — status", 16, yOffset, []statusCheck{
 		{"A",
 			`((max by (zone) (dnshealth_soa_serial{zone="$zone"}) - min by (zone) (dnshealth_soa_serial{zone="$zone"})) == bool 0) and on(zone) (count by (zone) (dnshealth_soa_serial{zone="$zone"}) > bool 0) or on() vector(0)`,
 			"All NSs report same SOA serial"},

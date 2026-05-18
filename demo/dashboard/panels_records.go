@@ -43,7 +43,8 @@ func parentNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 		})).
 		OverrideByName("Glue IP", []dashboard.DynamicConfigValue{
 			{Id: "mappings", Value: emptyGlueMapping()},
-		})
+		}).
+		SortBy(sortByAsc("Nameserver"))
 }
 
 // selfNSRecordsTable joins three queries (self NS records, SOA query
@@ -93,9 +94,10 @@ func selfNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 		})).
 		WithTransformation(Organize(OrganizeOptions{
 			RenameByName: map[string]string{
-				"ip 1":     "IP",
-				"Value #B": "Responded",
-				"Value #C": "Recursion",
+				"nameserver": "Nameserver",
+				"ip 1":       "IP",
+				"Value #B":   "Responded",
+				"Value #C":   "Recursion",
 			},
 			IndexByName: map[string]int{
 				"nameserver": 0,
@@ -122,7 +124,8 @@ func selfNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 		OverrideByName("Recursion", []dashboard.DynamicConfigValue{
 			{Id: "mappings", Value: recursionYesNoMappings()},
 			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
-		})
+		}).
+		SortBy(sortByAsc("Nameserver"))
 }
 
 // soaSerialsTable shows one row per nameserver with SOA serial,
@@ -156,12 +159,13 @@ func soaSerialsTable(yOffset uint32) *table.PanelBuilder {
 		})).
 		WithTransformation(Organize(OrganizeOptions{
 			RenameByName: map[string]string{
-				"ip 1":     "IP",
-				"Value #A": "Serial",
-				"Value #B": "Refresh (s)",
-				"Value #C": "Retry (s)",
-				"Value #D": "Expire (s)",
-				"Value #E": "Min TTL (s)",
+				"nameserver": "Nameserver",
+				"ip 1":       "IP",
+				"Value #A":   "Serial",
+				"Value #B":   "Refresh (s)",
+				"Value #C":   "Retry (s)",
+				"Value #D":   "Expire (s)",
+				"Value #E":   "Min TTL (s)",
 			},
 			IndexByName: map[string]int{
 				"nameserver": 0,
@@ -180,5 +184,6 @@ func soaSerialsTable(yOffset uint32) *table.PanelBuilder {
 				"instance 1": true, "instance 2": true, "instance 3": true, "instance 4": true, "instance 5": true,
 				"job 1": true, "job 2": true, "job 3": true, "job 4": true, "job 5": true,
 			},
-		}))
+		})).
+		SortBy(sortByAsc("Nameserver"))
 }

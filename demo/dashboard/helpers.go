@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/grafana/grafana-foundation-sdk/go/cog"
+	"github.com/grafana/grafana-foundation-sdk/go/common"
 	"github.com/grafana/grafana-foundation-sdk/go/dashboard"
 )
 
@@ -76,6 +78,16 @@ func cellOptionsColorBackground() any {
 	return map[string]any{
 		"type": "color-background",
 		"mode": "basic",
+	}
+}
+
+// sortByAsc returns a single-entry sortBy spec suitable for
+// table.PanelBuilder.SortBy(). Sorts ascending by the named column
+// (DisplayName matches the post-rename header text, not the raw
+// metric label).
+func sortByAsc(displayName string) []cog.Builder[common.TableSortByFieldState] {
+	return []cog.Builder[common.TableSortByFieldState]{
+		common.NewTableSortByFieldStateBuilder().DisplayName(displayName),
 	}
 }
 

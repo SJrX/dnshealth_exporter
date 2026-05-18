@@ -96,18 +96,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Test"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 260
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "Result"
             },
             "properties": [
@@ -137,6 +125,10 @@
                   "mode": "basic",
                   "type": "color-background"
                 }
+              },
+              {
+                "id": "custom.width",
+                "value": 80
               }
             ]
           }
@@ -229,18 +221,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Test"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 280
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "Result"
             },
             "properties": [
@@ -270,6 +250,10 @@
                   "mode": "basic",
                   "type": "color-background"
                 }
+              },
+              {
+                "id": "custom.width",
+                "value": 80
               }
             ]
           }
@@ -341,18 +325,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Test"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 260
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "Result"
             },
             "properties": [
@@ -382,6 +354,10 @@
                   "mode": "basic",
                   "type": "color-background"
                 }
+              },
+              {
+                "id": "custom.width",
+                "value": 80
               }
             ]
           }
@@ -441,6 +417,11 @@
         "frameIndex": 0,
         "showHeader": true,
         "showTypeIcons": false,
+        "sortBy": [
+          {
+            "displayName": "Nameserver"
+          }
+        ],
         "footer": {
           "show": false,
           "reducer": null,
@@ -546,7 +527,8 @@
             "renameByName": {
               "Value #B": "Responded",
               "Value #C": "Recursion",
-              "ip 1": "IP"
+              "ip 1": "IP",
+              "nameserver": "Nameserver"
             },
             "indexByName": {
               "Value #B": 2,
@@ -583,6 +565,11 @@
         "frameIndex": 0,
         "showHeader": true,
         "showTypeIcons": false,
+        "sortBy": [
+          {
+            "displayName": "Nameserver"
+          }
+        ],
         "footer": {
           "show": false,
           "reducer": null,
@@ -736,7 +723,8 @@
               "Value #C": "Retry (s)",
               "Value #D": "Expire (s)",
               "Value #E": "Min TTL (s)",
-              "ip 1": "IP"
+              "ip 1": "IP",
+              "nameserver": "Nameserver"
             },
             "indexByName": {
               "Value #A": 2,
@@ -785,6 +773,11 @@
         "frameIndex": 0,
         "showHeader": true,
         "showTypeIcons": false,
+        "sortBy": [
+          {
+            "displayName": "Nameserver"
+          }
+        ],
         "footer": {
           "show": false,
           "reducer": null,

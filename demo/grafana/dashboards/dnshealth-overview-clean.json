@@ -30,7 +30,7 @@
       "transparent": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "dnshealth-prometheus"
+        "uid": "${prometheus}"
       },
       "gridPos": {
         "h": 8,
@@ -163,7 +163,7 @@
       "transparent": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "dnshealth-prometheus"
+        "uid": "${prometheus}"
       },
       "gridPos": {
         "h": 8,
@@ -275,7 +275,7 @@
       "transparent": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "dnshealth-prometheus"
+        "uid": "${prometheus}"
       },
       "gridPos": {
         "h": 8,
@@ -388,7 +388,7 @@
       "transparent": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "dnshealth-prometheus"
+        "uid": "${prometheus}"
       },
       "gridPos": {
         "h": 10,
@@ -491,7 +491,7 @@
       "transparent": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "dnshealth-prometheus"
+        "uid": "${prometheus}"
       },
       "gridPos": {
         "h": 10,
@@ -694,7 +694,7 @@
       "transparent": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "dnshealth-prometheus"
+        "uid": "${prometheus}"
       },
       "gridPos": {
         "h": 10,
@@ -803,7 +803,7 @@
           "transparent": false,
           "datasource": {
             "type": "prometheus",
-            "uid": "dnshealth-prometheus"
+            "uid": "${prometheus}"
           },
           "gridPos": {
             "h": 8,
@@ -853,7 +853,7 @@
           "transparent": false,
           "datasource": {
             "type": "prometheus",
-            "uid": "dnshealth-prometheus"
+            "uid": "${prometheus}"
           },
           "gridPos": {
             "h": 8,
@@ -916,7 +916,7 @@
           "transparent": false,
           "datasource": {
             "type": "prometheus",
-            "uid": "dnshealth-prometheus"
+            "uid": "${prometheus}"
           },
           "gridPos": {
             "h": 8,
@@ -966,7 +966,7 @@
           "transparent": false,
           "datasource": {
             "type": "prometheus",
-            "uid": "dnshealth-prometheus"
+            "uid": "${prometheus}"
           },
           "gridPos": {
             "h": 8,
@@ -1005,6 +1005,19 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "prometheus",
+        "label": "Prometheus",
+        "skipUrlSync": false,
+        "query": "prometheus",
+        "multi": false,
+        "allowCustomValue": true,
+        "includeAll": false,
+        "auto": false,
+        "auto_min": "10s",
+        "auto_count": 30
+      },
+      {
         "type": "query",
         "name": "zone",
         "label": "Zone",
@@ -1016,7 +1029,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "dnshealth-prometheus"
+          "uid": "${prometheus}"
         },
         "current": {
           "selected": true,

@@ -33,6 +33,7 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 		Tags([]string{"dnshealth"}).
 		Refresh("10s").
 		Time("now-15m", "now").
+		WithVariable(dsVariable()).
 		WithVariable(zoneVariable())
 
 	if includeInfoText {

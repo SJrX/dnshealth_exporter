@@ -274,6 +274,115 @@ func TestSOAProber_NameserverReturnsNXDOMAIN(t *testing.T) {
 		WithLabels("zone", "example.test", "ip", "127.240.0.2"))
 }
 
+func TestSOAProber_MNAMEInNSSetAndResolves(t *testing.T) {
+	// Fixture Setup — SOA MNAME = ns1.example.test, which is in the
+	// NS RR set and has an A record so it resolves. Happy path.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test", Mname("ns1.example.test")),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test", Mname("ns1.example.test")),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT
+	metrics := env.Probe(prober.ProbeSOA, "example.test")
+
+	// Verification — info gauge carries MNAME as a label; both
+	// boolean checks pass.
+	AssertGauge(t, metrics, "dnshealth_soa_mname",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2",
+			"mname", "ns1.example.test."),
+		WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_soa_mname_in_ns_set",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_soa_mname_resolves",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(1))
+}
+
+func TestSOAProber_MNAMENotInNSSet(t *testing.T) {
+	// Fixture Setup — SOA MNAME points at a hostname that is NOT a
+	// member of the zone's NS RR set. The hostname does resolve
+	// (so _resolves stays 1), which isolates the in_ns_set failure.
+	// This is a real intoDNS finding: zone advertises ns1/ns2 but
+	// the SOA primary master is a hidden master not in the NS set.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test", Mname("hidden-master.example.test")),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			A("hidden-master.example.test", "127.240.0.99"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test", Mname("hidden-master.example.test")),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			A("hidden-master.example.test", "127.240.0.99"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT
+	metrics := env.Probe(prober.ProbeSOA, "example.test")
+
+	// Verification — info gauge carries the hidden-master label;
+	// in_ns_set is 0; resolves is 1.
+	AssertGauge(t, metrics, "dnshealth_soa_mname",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2",
+			"mname", "hidden-master.example.test."),
+		WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_soa_mname_in_ns_set",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(0))
+	AssertGauge(t, metrics, "dnshealth_soa_mname_resolves",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(1))
+}
+
+func TestSOAProber_MNAMEDoesNotResolve(t *testing.T) {
+	// Fixture Setup — SOA MNAME points at a hostname that has no
+	// A or AAAA records anywhere reachable. Captures the "MNAME is
+	// localhost." / dead-master class of misconfiguration.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test", Mname("bogus.example.test")),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test", Mname("bogus.example.test")),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			// Deliberately NO A/AAAA for bogus.example.test —
+			// the lookup returns no records.
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT
+	metrics := env.Probe(prober.ProbeSOA, "example.test")
+
+	// Verification — info gauge present; both checks fail.
+	AssertGauge(t, metrics, "dnshealth_soa_mname",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2",
+			"mname", "bogus.example.test."),
+		WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_soa_mname_in_ns_set",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(0))
+	AssertGauge(t, metrics, "dnshealth_soa_mname_resolves",
+		WithLabels("zone", "example.test", "ip", "127.240.0.2"),
+		WithValue(0))
+}
+
 func TestSOAProber_NameserverReturnsGarbage(t *testing.T) {
 	// Fixture Setup — ns1 sends garbage bytes
 	env := NewDNSFixture(t).

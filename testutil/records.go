@@ -46,6 +46,13 @@ func Minttl(n uint32) SOAOption {
 	return func(soa *dns.SOA) { soa.Minttl = n }
 }
 
+// Mname sets the SOA MNAME field (the primary master nameserver).
+// miekg/dns calls this field `Ns` on the SOA struct, which is easy
+// to misread — this helper makes test intent obvious.
+func Mname(name string) SOAOption {
+	return func(soa *dns.SOA) { soa.Ns = dns.Fqdn(name) }
+}
+
 // SOA creates a dns.SOA record with sensible defaults.
 // Only specify the options that matter for your test.
 // The serial auto-increments by default. Use Serial(n) to set

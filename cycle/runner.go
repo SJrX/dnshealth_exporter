@@ -27,6 +27,14 @@ type Runner struct {
 	DNSTimeouts           *prometheus.CounterVec
 	DelegationCacheHits   prometheus.Counter
 	DelegationCacheMisses prometheus.Counter
+
+	// Per-zone gauge: 1 if the parent's delegation walk succeeded
+	// this cycle (NS RR set is non-empty), 0 if it failed. Lives on
+	// the permanent registry but Reset()s each cycle so zones removed
+	// from config drop out after one cycle. Eliminates the
+	// silent-absence failure mode where a broken delegation produced
+	// NO series at all for the affected zone.
+	ParentDelegation *prometheus.GaugeVec
 }
 
 // NewRunner creates a Runner and registers operational metrics on
@@ -60,7 +68,11 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		Name: "dnshealth_delegation_cache_misses_total",
 		Help: "Total delegation cache misses (triggered a fresh walk).",
 	})
-	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts, cacheHits, cacheMisses)
+	parentDelegation := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_parent_delegation",
+		Help: "1 if the parent's NS RR set for this zone is non-empty (delegation walk succeeded), 0 otherwise. Reset each cycle.",
+	}, []string{"zone"})
+	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts, cacheHits, cacheMisses, parentDelegation)
 
 	return &Runner{
 		Cache:                 c,
@@ -72,6 +84,7 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		DNSTimeouts:           dnsTimeouts,
 		DelegationCacheHits:   cacheHits,
 		DelegationCacheMisses: cacheMisses,
+		ParentDelegation:      parentDelegation,
 	}
 }
 
@@ -87,6 +100,13 @@ type CycleResult struct {
 // collects all results, and returns them.
 func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 	start := time.Now()
+
+	// Reset per-zone operational gauges so zones removed from config
+	// drop out of /metrics after one cycle (instead of carrying their
+	// last-seen value forever).
+	if r.ParentDelegation != nil {
+		r.ParentDelegation.Reset()
+	}
 
 	var (
 		mu         sync.Mutex
@@ -165,10 +185,18 @@ func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config)
 		delegation, err = prober.WalkDelegation(ctx, zone, client, r.Logger)
 		if err != nil {
 			r.Logger.Warn("delegation walk failed", "zone", zone, "err", err)
+			if r.ParentDelegation != nil {
+				r.ParentDelegation.WithLabelValues(zone).Set(0)
+			}
 			return nil
 		}
 		r.Cache.Set(zone, delegation)
 		r.Logger.Debug("delegation cache miss, stored", "zone", zone)
+	}
+
+	// Delegation acquired (fresh walk or cache hit) and is non-nil.
+	if r.ParentDelegation != nil {
+		r.ParentDelegation.WithLabelValues(zone).Set(1)
 	}
 
 	// Discover nameservers — start from the parent's glue, dedupe,

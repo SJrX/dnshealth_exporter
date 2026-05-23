@@ -156,28 +156,22 @@ func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry 
 	}
 
 	// Identify hostnames needing augmentation: no glue at all, or
-	// only one IP family present.
+	// only one IP family present. A hostname with no glue still
+	// enters `families` (with both fields false) on its first-seen
+	// iteration, so it appears in the keyset below and gets flagged.
 	families := make(map[string]struct{ v4, v6 bool })
-	needs := make(map[string]bool)
 	for _, ns := range delegation.NSRecords {
 		fam := families[ns.Hostname]
-		if ns.IP == "" {
-			needs[ns.Hostname] = true
-			families[ns.Hostname] = fam
-			continue
-		}
-		if parsed := net.ParseIP(ns.IP); parsed != nil && parsed.To4() == nil {
-			fam.v6 = true
-		} else {
-			fam.v4 = true
+		if ns.IP != "" {
+			if parsed := net.ParseIP(ns.IP); parsed != nil && parsed.To4() == nil {
+				fam.v6 = true
+			} else {
+				fam.v4 = true
+			}
 		}
 		families[ns.Hostname] = fam
-		if _, already := needs[ns.Hostname]; !already {
-			needs[ns.Hostname] = false
-		}
 	}
-	for host := range needs {
-		fam := families[host]
+	for host, fam := range families {
 		if fam.v4 && fam.v6 {
 			continue
 		}

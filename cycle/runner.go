@@ -183,7 +183,7 @@ func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config)
 	// Per spec 006 FR-002 / FR-010 / FR-011 / contracts/nameserver-fanout.md.
 	nameservers, glueByHost := buildInitialNameservers(delegation.NSRecords)
 
-	for _, host := range hostsNeedingAugmentation(delegation.NSRecords, glueByHost) {
+	for _, host := range hostsNeedingAugmentation(delegation.NSRecords) {
 		ips, err := prober.ResolveHostnames(ctx, host, client, r.Logger)
 		if err != nil {
 			r.Logger.Warn("could not resolve NS hostname",
@@ -251,36 +251,27 @@ func buildInitialNameservers(nsRecords []prober.Nameserver) ([]prober.Nameserver
 //
 // Hostnames whose parent glue already covers both families are
 // skipped — no extra DNS queries beyond what today's code would do.
-func hostsNeedingAugmentation(nsRecords []prober.Nameserver, seen map[string]struct{}) []string {
-	hosts := make(map[string]bool) // hostname → need-augment
+func hostsNeedingAugmentation(nsRecords []prober.Nameserver) []string {
+	// hostname → which IP families parent glue covers. A hostname
+	// with no glue at all is still entered here (with both fields
+	// false) on its first-seen iteration, so it appears in the
+	// keyset below and gets flagged for augmentation.
 	families := make(map[string]struct{ v4, v6 bool })
 
 	for _, ns := range nsRecords {
 		f := families[ns.Hostname]
-		if ns.IP == "" {
-			// No glue at all → definitely needs augmentation.
-			hosts[ns.Hostname] = true
-			families[ns.Hostname] = f
-			continue
-		}
-		// Categorise the IP family.
-		if isIPv6(ns.IP) {
-			f.v6 = true
-		} else {
-			f.v4 = true
+		if ns.IP != "" {
+			if isIPv6(ns.IP) {
+				f.v6 = true
+			} else {
+				f.v4 = true
+			}
 		}
 		families[ns.Hostname] = f
-		// Mark for augmentation only if not yet definitely-covered.
-		if _, already := hosts[ns.Hostname]; !already {
-			hosts[ns.Hostname] = false
-		}
 	}
 
-	// Hostnames missing a family need augmentation. Hostnames with
-	// already-covered both families don't.
-	out := make([]string, 0, len(hosts))
-	for host := range hosts {
-		f := families[host]
+	out := make([]string, 0, len(families))
+	for host, f := range families {
 		if !f.v4 || !f.v6 {
 			out = append(out, host)
 		}

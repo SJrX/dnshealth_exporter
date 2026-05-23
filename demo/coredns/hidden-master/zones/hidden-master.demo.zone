@@ -1,0 +1,32 @@
+; hidden-master.demo. — exists to surface the self-only stealth NS
+; detection from spec 007. The auth advertises THREE NSes; the
+; parent (demo/coredns/root/zones/demo.zone) lists only TWO. The
+; third NS (`hidden-primary`) is the stealth NS — pre-feature it
+; was invisible to the exporter; post-feature it shows up as
+; classification="self-only" with reachable=0 (modeling a leaked
+; listing — no A record anywhere reachable to back the listing).
+
+$ORIGIN hidden-master.demo.
+$TTL 30
+
+@   IN  SOA  ns1.hidden-master.demo. admin.hidden-master.demo. (
+            2026052301  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+; Self-side NS RR set — THREE NSes. The third (`hidden-primary`)
+; is the stealth NS, deliberately absent from the parent referral.
+@                IN  NS   ns1.hidden-master.demo.
+@                IN  NS   ns2.hidden-master.demo.
+@                IN  NS   hidden-primary.hidden-master.demo.
+
+ns1              IN  A    172.31.0.21
+ns2              IN  A    172.31.0.21
+; NOTE: NO A record for hidden-primary — that's what makes the
+; stealth reachability probe (spec 007 FR-010) read 0 for this
+; zone, modeling the "leaked listing" pattern.
+
+@                IN  A    172.31.0.21

@@ -164,6 +164,20 @@ var nsStatusChecks = []statusCheck{
 			"**Why FAIL matters**: NS records pointing at a CNAME violate RFC 2181 §10.3; resolver handling is inconsistent → intermittent resolution failures.  \n" +
 			"**Investigate**: NS records tables show each NS hostname; check its CNAME chain externally.",
 	},
+	// Stealth NS detection (spec 007). PASS only if both
+	// self-only and parent-only counts are zero — i.e., the
+	// parent's NS set and the union of self-side views are
+	// identical. FAIL otherwise OR when no series exist (the
+	// `or on() vector(0)` fallback covers the "no data this
+	// cycle" case so an outage doesn't silently read PASS).
+	{"G",
+		`(max by (zone) (dnshealth_ns_classification_count{classification="self-only",zone="$zone"}) == bool 0) and on(zone) (max by (zone) (dnshealth_ns_classification_count{classification="parent-only",zone="$zone"}) == bool 0) or on() vector(0)`,
+		"No stealth NSes (parent and self agree on NS set)",
+		"**Metric**: `dnshealth_ns_classification_count{classification=\"self-only\"|\"parent-only\"}`  \n" +
+			"**Why FAIL matters**: At least one NS hostname is asymmetric — the parent advertises an NS the zone's own authoritative servers don't list (parent-only), or an auth lists an NS the parent doesn't (self-only, the \"stealth\" case). Self-only divergence can be a legitimate hidden-master setup (NOTIFY-driven primary not in the public NS set, by design) — verify intent before alerting.  \n" +
+			"**Scope limitation**: This row detects asymmetry between sources we can query. RFC 8499 \"stealth\" servers — those absent from EVERY public source — are not detectable by any single-vantage-point exporter and remain invisible to this check. See spec 007.  \n" +
+			"**Investigate**: NS records (from parent) and NS records (from the zone) tables side-by-side — the hostname appearing in only one table is the asymmetric NS. For self-only cases, check `dnshealth_ns_stealth_reachable{nameserver=X}` — 1 = working hidden master, 0 = leaked listing.",
+	},
 }
 
 var soaStatusChecks = []statusCheck{

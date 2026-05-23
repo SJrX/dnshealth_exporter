@@ -141,6 +141,43 @@ grep -E '^dnshealth_ns_record\{[^}]+\} 1$' "${METRICS_FILE}" \
     | grep -F 'source="self"' >/dev/null \
     || fail "ns-names-mismatch.demo.: self-side ns-self-c series missing"
 
+echo "A3d: hidden-master.demo. surfaces self-only stealth NS (spec 007)"
+# Parent advertises 2 NSes (ns1 + ns2); auth at 172.31.0.21
+# reports a THIRD NS (hidden-primary) in its self NS RR set.
+# Expected classification: hidden-primary -> self-only,
+# the other two -> both. Stealth-reachability for hidden-primary
+# reads 0 (no A record anywhere — leaked listing pattern).
+# Also verifies the per-zone count gauge emits explicit 0 for
+# parent-only / 1 for self-only / 2 for both.
+grep -E '^dnshealth_ns_classification\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="hidden-master.demo."' \
+    | grep -F 'nameserver="hidden-primary.hidden-master.demo."' \
+    | grep -F 'classification="self-only"' >/dev/null \
+    || fail "hidden-master.demo.: hidden-primary stealth NS not surfaced as self-only"
+grep -E '^dnshealth_ns_classification_count\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="hidden-master.demo."' \
+    | grep -F 'classification="self-only"' >/dev/null \
+    || fail "hidden-master.demo.: self-only count gauge not 1"
+grep -E '^dnshealth_ns_classification_count\{[^}]+\} 2$' "${METRICS_FILE}" \
+    | grep -F 'zone="hidden-master.demo."' \
+    | grep -F 'classification="both"' >/dev/null \
+    || fail "hidden-master.demo.: both count gauge not 2"
+grep -E '^dnshealth_ns_classification_count\{[^}]+\} 0$' "${METRICS_FILE}" \
+    | grep -F 'zone="hidden-master.demo."' \
+    | grep -F 'classification="parent-only"' >/dev/null \
+    || fail "hidden-master.demo.: parent-only count gauge not 0 (FR-008 zero-emission)"
+# Reachability: hidden-primary has no A record anywhere, so the
+# stealth-reachability probe should read 0 (leaked listing).
+grep -E '^dnshealth_ns_stealth_reachable\{[^}]+\} 0$' "${METRICS_FILE}" \
+    | grep -F 'zone="hidden-master.demo."' \
+    | grep -F 'nameserver="hidden-primary.hidden-master.demo."' >/dev/null \
+    || fail "hidden-master.demo.: hidden-primary stealth_reachable not 0 (expected leaked-listing pattern)"
+# Healthy zone sanity: no stealth NSes detected.
+grep -E '^dnshealth_ns_classification_count\{[^}]+\} 0$' "${METRICS_FILE}" \
+    | grep -F 'zone="healthy.demo."' \
+    | grep -F 'classification="self-only"' >/dev/null \
+    || fail "healthy.demo.: self-only count gauge not 0 (expected clean state)"
+
 echo "A4: probe cycle ran and produced query counts"
 grep -E '^dnshealth_probe_cycle_duration_seconds [0-9]' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_probe_cycle_duration_seconds not present"

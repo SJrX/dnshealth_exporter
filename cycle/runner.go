@@ -35,6 +35,22 @@ type Runner struct {
 	// silent-absence failure mode where a broken delegation produced
 	// NO series at all for the affected zone.
 	ParentDelegation *prometheus.GaugeVec
+
+	// Per-(zone, classification) gauge: count of NS hostnames in
+	// each classification (parent-only, self-only, both) for this
+	// zone this cycle. Reset()s each cycle so removed zones / NSes
+	// drop out. The classifier prober emits per-NS info gauges; the
+	// aggregation pass in Run() derives these counts from them
+	// — including explicit Set(0) for classifications with no
+	// entries, so PromQL can distinguish "no divergence" from "no
+	// data this cycle". See spec 007 FR-005 / FR-008 / R-2.
+	//
+	// Note: dnshealth_ns_stealth_reachable (FR-010) is NOT a
+	// runner-owned gauge — it's emitted directly via the classifier's
+	// ProbeResult Metrics pipeline (which produces a per-cycle
+	// registry entry). Per-cycle registry semantics already give the
+	// reset-on-no-stealth behavior the contract requires.
+	NSClassificationCount *prometheus.GaugeVec
 }
 
 // NewRunner creates a Runner and registers operational metrics on
@@ -72,7 +88,11 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		Name: "dnshealth_parent_delegation",
 		Help: "1 if the parent's NS RR set for this zone is non-empty (delegation walk succeeded), 0 otherwise. Reset each cycle.",
 	}, []string{"zone"})
-	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts, cacheHits, cacheMisses, parentDelegation)
+	nsClassificationCount := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_ns_classification_count",
+		Help: "Count of NS hostnames in each classification (parent-only / self-only / both) for this zone this cycle. Reset each cycle; explicit Set(0) per (zone, classification) when count is zero so PromQL can distinguish 'no divergence' from 'no data'.",
+	}, []string{"zone", "classification"})
+	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts, cacheHits, cacheMisses, parentDelegation, nsClassificationCount)
 
 	return &Runner{
 		Cache:                 c,
@@ -85,6 +105,7 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		DelegationCacheHits:   cacheHits,
 		DelegationCacheMisses: cacheMisses,
 		ParentDelegation:      parentDelegation,
+		NSClassificationCount: nsClassificationCount,
 	}
 }
 
@@ -106,6 +127,9 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 	// last-seen value forever).
 	if r.ParentDelegation != nil {
 		r.ParentDelegation.Reset()
+	}
+	if r.NSClassificationCount != nil {
+		r.NSClassificationCount.Reset()
 	}
 
 	var (
@@ -158,6 +182,30 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 			if res.TimedOut {
 				r.DNSTimeouts.WithLabelValues(res.IP).Inc()
 			}
+		}
+	}
+
+	// NS classification aggregation — per-zone counts derived from
+	// the ns_classification prober's per-NS results. Initialize all
+	// three classification values to 0 for every configured zone so
+	// PromQL can distinguish "no divergence" (count=0) from "no data
+	// this cycle" (series absent). Then count up from results.
+	// See spec 007 FR-005, FR-008, R-2.
+	if r.NSClassificationCount != nil {
+		for _, zone := range cfg.Zones {
+			r.NSClassificationCount.WithLabelValues(zone, "parent-only").Set(0)
+			r.NSClassificationCount.WithLabelValues(zone, "self-only").Set(0)
+			r.NSClassificationCount.WithLabelValues(zone, "both").Set(0)
+		}
+		for _, res := range allResults {
+			if res.Check != "ns_classification" {
+				continue
+			}
+			classification, ok := res.Labels["classification"]
+			if !ok {
+				continue
+			}
+			r.NSClassificationCount.WithLabelValues(res.Zone, classification).Inc()
 		}
 	}
 

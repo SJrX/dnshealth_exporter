@@ -13,7 +13,7 @@
   },
   "fiscalYearStartMonth": 0,
   "refresh": "10s",
-  "schemaVersion": 41,
+  "schemaVersion": 42,
   "panels": [
     {
       "type": "table",

@@ -110,6 +110,29 @@ grep -E '^dnshealth_parent_delegation\{zone="healthy\.demo\."\} 1$' "${METRICS_F
 grep -E '^dnshealth_parent_delegation\{zone="v6-only\.demo\."\} 1$' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_parent_delegation for v6-only.demo. is not 1"
 
+echo "A4d: dnshealth_soa_mname metrics surface MNAME validity"
+# Happy path — healthy.demo.'s SOA MNAME is ns1.healthy.demo., which
+# IS in the NS RR set and resolves (A + AAAA glue both present).
+grep -E '^dnshealth_soa_mname\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="healthy.demo."' \
+    | grep -F 'mname="ns1.healthy.demo."' >/dev/null \
+    || fail "dnshealth_soa_mname for healthy.demo. missing or mname label wrong"
+grep -E '^dnshealth_soa_mname_in_ns_set\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="healthy.demo."' >/dev/null \
+    || fail "dnshealth_soa_mname_in_ns_set for healthy.demo. is not 1"
+grep -E '^dnshealth_soa_mname_resolves\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="healthy.demo."' >/dev/null \
+    || fail "dnshealth_soa_mname_resolves for healthy.demo. is not 1"
+
+# Failure path — ns-mismatch.demo.'s SOA MNAME is
+# ns-internal-a.ns-mismatch.demo., which is NOT in the parent's NS RR
+# set (parent advertises only ns1.ns-mismatch.demo.). The hostname
+# itself resolves through the auth server, so _resolves is 1 but
+# _in_ns_set is 0 — exercises the "MNAME mismatch" alert path.
+grep -E '^dnshealth_soa_mname_in_ns_set\{[^}]+\} 0$' "${METRICS_FILE}" \
+    | grep -F 'zone="ns-mismatch.demo."' >/dev/null \
+    || fail "dnshealth_soa_mname_in_ns_set for ns-mismatch.demo. is not 0 (failure path)"
+
 echo "A5: build info present"
 grep -F 'dnshealth_build_info' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_build_info not present"

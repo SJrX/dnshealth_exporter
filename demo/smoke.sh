@@ -133,6 +133,19 @@ grep -E '^dnshealth_soa_mname_in_ns_set\{[^}]+\} 0$' "${METRICS_FILE}" \
     | grep -F 'zone="ns-mismatch.demo."' >/dev/null \
     || fail "dnshealth_soa_mname_in_ns_set for ns-mismatch.demo. is not 0 (failure path)"
 
+echo "A4e: dnshealth_ns_hostname_* surfaces per-NS hostname validity"
+# healthy.demo.'s NSs (ns1.healthy.demo., ns2.healthy.demo.) are
+# valid LDH and not CNAMEs, so the happy path is all-1 / all-0.
+# The 0-side of each metric (invalid syntax, is-a-CNAME) has no
+# corresponding demo zone — exercised by the integration tests
+# instead, since adding malformed NSs to coredns is finicky.
+grep -E '^dnshealth_ns_hostname_syntax_valid\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="healthy.demo."' | grep -F 'nameserver="ns1.healthy.demo."' >/dev/null \
+    || fail "dnshealth_ns_hostname_syntax_valid for healthy.demo. / ns1 is not 1"
+grep -E '^dnshealth_ns_hostname_is_cname\{[^}]+\} 0$' "${METRICS_FILE}" \
+    | grep -F 'zone="healthy.demo."' | grep -F 'nameserver="ns1.healthy.demo."' >/dev/null \
+    || fail "dnshealth_ns_hostname_is_cname for healthy.demo. / ns1 is not 0"
+
 echo "A5: build info present"
 grep -F 'dnshealth_build_info' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_build_info not present"

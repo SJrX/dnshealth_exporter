@@ -120,3 +120,16 @@ func AAAA(name, ipv6 string) dns.RR {
 		AAAA: net.ParseIP(ipv6),
 	}
 }
+
+// CNAME creates a dns.CNAME record aliasing name to target.
+func CNAME(name, target string) dns.RR {
+	return &dns.CNAME{
+		Hdr: dns.RR_Header{
+			Name:   dns.Fqdn(name),
+			Rrtype: dns.TypeCNAME,
+			Class:  dns.ClassINET,
+			Ttl:    300,
+		},
+		Target: dns.Fqdn(target),
+	}
+}

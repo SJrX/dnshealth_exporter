@@ -60,6 +60,15 @@ func parentStatusTable(yOffset uint32) *table.PanelBuilder {
 		{"A",
 			`(count by (zone) (dnshealth_ns_record{source="parent",zone="$zone"}) > bool 0) or on() vector(0)`,
 			"Parent has NS records for the zone"},
+		// dnshealth_parent_delegation fires the same cycle the
+		// delegation walk fails, whereas the row above only flips
+		// when the resulting per-NS series go to zero. Kept as a
+		// distinct row rather than a replacement — surfaces the
+		// gauge directly so an operator can correlate it with the
+		// query-counter panels without translating predicates.
+		{"B",
+			`dnshealth_parent_delegation{zone="$zone"} or on() vector(0)`,
+			"Parent delegation walk succeeded"},
 	})
 }
 
@@ -77,6 +86,16 @@ func nsStatusTable(yOffset uint32) *table.PanelBuilder {
 		{"D",
 			`((count by (zone) (group by (zone, nameserver) (dnshealth_ns_record{source="parent",zone="$zone"}))) == bool (count by (zone) (group by (zone, nameserver) (dnshealth_ns_record{source="self",zone="$zone"})))) and on(zone) (count by (zone) (dnshealth_ns_record{source="self",zone="$zone"}) > bool 0) or on() vector(0)`,
 			"Parent and self report same NS records"},
+		// min-aggregation: PASS only if EVERY NS hostname is
+		// syntactically valid; any one bad hostname fails the zone.
+		{"E",
+			`min by (zone) (dnshealth_ns_hostname_syntax_valid{zone="$zone"}) or on() vector(0)`,
+			"All NS hostnames syntactically valid (LDH)"},
+		// max-aggregation inverted: PASS if no NS hostname is a
+		// CNAME (RFC 2181 §10.3). A single CNAMEd NS fails the row.
+		{"F",
+			`((max by (zone) (dnshealth_ns_hostname_is_cname{zone="$zone"})) == bool 0) or on() vector(0)`,
+			"No NS hostname is a CNAME (RFC 2181 §10.3)"},
 	})
 }
 
@@ -85,5 +104,14 @@ func soaStatusTable(yOffset uint32) *table.PanelBuilder {
 		{"A",
 			`((max by (zone) (dnshealth_soa_serial{zone="$zone"}) - min by (zone) (dnshealth_soa_serial{zone="$zone"})) == bool 0) and on(zone) (count by (zone) (dnshealth_soa_serial{zone="$zone"}) > bool 0) or on() vector(0)`,
 			"All NSs report same SOA serial"},
+		// MNAME validity (proposals S1). min-aggregation: PASS
+		// only if every NS reports a MNAME that is in the NS set
+		// and resolves; a single dissenting NS fails the row.
+		{"B",
+			`min by (zone) (dnshealth_soa_mname_in_ns_set{zone="$zone"}) or on() vector(0)`,
+			"SOA MNAME is in zone's NS RR set"},
+		{"C",
+			`min by (zone) (dnshealth_soa_mname_resolves{zone="$zone"}) or on() vector(0)`,
+			"SOA MNAME hostname resolves to A or AAAA"},
 	})
 }

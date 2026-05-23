@@ -99,3 +99,14 @@ ns-names-mismatch          IN  NS   ns-parent-a.ns-names-mismatch.demo.
 ns-names-mismatch          IN  NS   ns-parent-b.ns-names-mismatch.demo.
 ns-parent-a.ns-names-mismatch  IN  A  172.31.0.18
 ns-parent-b.ns-names-mismatch  IN  A  172.31.0.18
+
+; hidden-master.demo. — spec 007 stealth-NS detection. Parent
+; advertises TWO NSes (ns1 + ns2 both glued at 172.31.0.21). The
+; auth container at .21 reports a THIRD NS (`hidden-primary`) in
+; its own NS RR set — the stealth NS. No A record for hidden-primary
+; anywhere, so the stealth-reachability probe (FR-010) reads 0:
+; models the "leaked listing" pattern, not a working hidden master.
+hidden-master              IN  NS   ns1.hidden-master.demo.
+hidden-master              IN  NS   ns2.hidden-master.demo.
+ns1.hidden-master          IN  A    172.31.0.21
+ns2.hidden-master          IN  A    172.31.0.21

@@ -71,6 +71,11 @@ dnshealth_ns_classification_count{zone="example.test.",classification="both"} 2
 |---|---|---|
 | `zone` | configured zones | Canonical FQDN. |
 | `nameserver` | detected self-only stealth NS | Canonical FQDN, lowercase. |
+| `ip` | ProbeResult plumbing | Always empty string for stealth NSes (they have no parent-side glue by definition). |
+| `check` | ProbeResult plumbing | Always `ns_classification`. |
+| `classification` | ProbeResult plumbing | Always `self-only` (the metric is emitted only for that classification). |
+
+> **Note on extra labels**: the implementation emits this metric through the standard `ProbeResult` → `BuildRegistry` pipeline (see audit.md D-1), which adds the same `ip` / `check` / `classification` labels every other ProbeResult-emitted metric carries. Operators querying `{zone, nameserver}` get correct behavior; the extras are informational and unused in any committed alert rule or dashboard query.
 
 **Cardinality bound**: At most one series per self-only NS per zone — typically zero, occasionally one or two for zones with hidden-master setups. Bounded by the operator's actual stealth-NS count.
 

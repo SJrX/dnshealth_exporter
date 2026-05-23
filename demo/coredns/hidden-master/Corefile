@@ -1,0 +1,15 @@
+# Authoritative for hidden-master.demo. — exists to surface the
+# self-only stealth NS detection from spec 007. The interesting bit
+# is in the auth zone file: it advertises THREE NSes for the zone,
+# but the parent (root) referral lists only TWO of them. The third
+# (`hidden-primary.hidden-master.demo.`) is the stealth NS — present
+# in the auth's NS RR set but absent from the parent's referral. Its
+# A record is intentionally absent from every reachable source, so
+# the active reachability probe (FR-010) reads 0 — modeling a
+# "leaked listing" rather than a working hidden master.
+
+hidden-master.demo. {
+    file /zones/hidden-master.demo.zone
+    log
+    errors
+}

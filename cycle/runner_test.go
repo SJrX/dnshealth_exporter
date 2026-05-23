@@ -446,6 +446,59 @@ func TestCycleRunner_OperationalCountersIncrement(t *testing.T) {
 	}
 }
 
+// TestCycleRunner_NSClassificationCountResetsAndZeroes verifies the
+// per-cycle Reset+Set(0) pattern for dnshealth_ns_classification_count
+// — a zone with no NS asymmetry MUST consistently emit explicit 0
+// gauges (not "no series at all") across consecutive cycles, so PromQL
+// can distinguish "no divergence" from "no data this cycle". See
+// spec 007 FR-008 / R-2.
+func TestCycleRunner_NSClassificationCountResetsAndZeroes(t *testing.T) {
+	// Fixture Setup — clean zone, parent and self agree on NS set.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 5 * time.Second,
+		ZoneDeadline: 30 * time.Second,
+	}
+
+	// Exercise SUT — two cycles to prove the Reset+Set pattern
+	// works across cycles (not just on first cycle).
+	runner.Run(context.Background(), cfg)
+	runner.Run(context.Background(), cfg)
+
+	// Verification — all three classification counts emitted with
+	// explicit values. self-only and parent-only must read 0 (no
+	// divergence); both must read 1 (one NS present in both sets).
+	AssertGauge(t, permRegistry, "dnshealth_ns_classification_count",
+		WithLabels("zone", "example.test", "classification", "self-only"),
+		WithValue(0))
+	AssertGauge(t, permRegistry, "dnshealth_ns_classification_count",
+		WithLabels("zone", "example.test", "classification", "parent-only"),
+		WithValue(0))
+	AssertGauge(t, permRegistry, "dnshealth_ns_classification_count",
+		WithLabels("zone", "example.test", "classification", "both"),
+		WithValue(1))
+}
+
 // counterValue returns the value of the dnshealth_dns_timeouts_total
 // counter for the given server label, or 0 if no series exists.
 func counterValue(t *testing.T, reg *prometheus.Registry, metric, label, value string) float64 {

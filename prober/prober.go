@@ -281,6 +281,15 @@ func ResolveHostnames(ctx context.Context, hostname string, client *dns.Client, 
 	return out, nil
 }
 
+// defaultReferralBudget caps how many out-of-band NS-hostname
+// lookups resolveOneFamily can do across one resolution chain. Each
+// glueless-referral fallback decrements this budget; recursion ends
+// when it reaches zero. 3 covers any realistic delegation depth —
+// in practice no real-world zone needs more than 1, but the cap
+// gives headroom for pathological topologies without becoming
+// unbounded. See #27.
+const defaultReferralBudget = 3
+
 // resolveOneFamily walks the delegation chain looking for records
 // of a single type (TypeA or TypeAAAA). Symmetric per family —
 // each call is independent.
@@ -288,7 +297,8 @@ func ResolveHostnames(ctx context.Context, hostname string, client *dns.Client, 
 // Returns:
 //   - non-empty slice + nil: records found.
 //   - empty slice + nil: legitimately no records of this type
-//     (NODATA, or referral chain runs out of usable glue).
+//     (NODATA, or referral chain runs out of usable glue AND the
+//     out-of-band fallback also couldn't find a server).
 //   - nil + non-nil error: protocol failure (timeout, SERVFAIL).
 //
 // The walker's glue extraction accepts both A and AAAA records —
@@ -296,6 +306,25 @@ func ResolveHostnames(ctx context.Context, hostname string, client *dns.Client, 
 // hop, since both families of address can reach the same server (a
 // dual-stack server answers either way).
 func resolveOneFamily(ctx context.Context, hostname string, qtype uint16, client *dns.Client, logger *slog.Logger) ([]string, error) {
+	return resolveOneFamilyWithBudget(ctx, hostname, qtype, defaultReferralBudget, client, logger)
+}
+
+// resolveOneFamilyWithBudget is the same walk as resolveOneFamily
+// but with an explicit budget for out-of-band NS-hostname lookups.
+// Direct callers should use resolveOneFamily; this entry point
+// exists so the function can recurse on itself when it hits a
+// glueless referral, decrementing the budget on each recursion to
+// guarantee termination.
+//
+// Why the recursion is needed (#27): when a referral's Authority
+// section names an NS hostname that lives in a DIFFERENT zone than
+// the one being delegated, the parent does not have to ship glue
+// for it (and typically doesn't). Pre-fix, this code path would
+// give up and return (nil, nil) — indistinguishable from a real
+// NODATA, silently dropping the hostname from probing. Now it does
+// a separate walk to resolve the referral NS's IP, then continues
+// the original walk.
+func resolveOneFamilyWithBudget(ctx context.Context, hostname string, qtype uint16, budget int, client *dns.Client, logger *slog.Logger) ([]string, error) {
 	server := RootServers[0]
 
 	for depth := 0; depth < 10; depth++ {
@@ -350,6 +379,37 @@ func resolveOneFamily(ctx context.Context, hostname string, qtype uint16, client
 				}
 			}
 		}
+
+		// Glueless-referral fallback (#27): if resp.Ns names NS
+		// hostnames but none had glue in the Additional section,
+		// resolve one out-of-band via a fresh walk from root. Only
+		// fires when budget > 0 — both to terminate pathological
+		// recursion and so the function still returns (nil, nil)
+		// for genuinely unresolvable chains rather than looping.
+		if nextServer == "" && budget > 0 {
+			for _, rr := range resp.Ns {
+				nsRR, ok := rr.(*dns.NS)
+				if !ok {
+					continue
+				}
+				// Query for A here — A is more universally present
+				// than AAAA, and this lookup only needs to find ONE
+				// reachable server to continue the outer walk; it
+				// doesn't have to fully cover both families of the
+				// referral NS itself.
+				referralIPs, rerr := resolveOneFamilyWithBudget(
+					ctx, nsRR.Ns, dns.TypeA, budget-1, client, logger)
+				if rerr != nil || len(referralIPs) == 0 {
+					continue
+				}
+				nextServer = ResolveAddress(referralIPs[0])
+				logger.Debug("resolved glueless referral NS out-of-band",
+					"original_hostname", hostname, "referral_ns", nsRR.Ns,
+					"referral_ip", referralIPs[0], "budget_remaining", budget-1)
+				break
+			}
+		}
+
 		if nextServer == "" {
 			// No usable referral and no answer — NODATA. Empty
 			// slice + nil error is the legitimate "no records of

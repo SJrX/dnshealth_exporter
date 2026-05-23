@@ -24,6 +24,13 @@
           "range": false,
           "legendFormat": "Parent has NS records for the zone",
           "refId": "A"
+        },
+        {
+          "expr": "dnshealth_parent_delegation{zone=\"$zone\"} or on() vector(0)",
+          "instant": true,
+          "range": false,
+          "legendFormat": "Parent delegation walk succeeded",
+          "refId": "B"
         }
       ],
       "title": "Parent — status",
@@ -149,6 +156,20 @@
           "range": false,
           "legendFormat": "Parent and self report same NS records",
           "refId": "D"
+        },
+        {
+          "expr": "min by (zone) (dnshealth_ns_hostname_syntax_valid{zone=\"$zone\"}) or on() vector(0)",
+          "instant": true,
+          "range": false,
+          "legendFormat": "All NS hostnames syntactically valid (LDH)",
+          "refId": "E"
+        },
+        {
+          "expr": "((max by (zone) (dnshealth_ns_hostname_is_cname{zone=\"$zone\"})) == bool 0) or on() vector(0)",
+          "instant": true,
+          "range": false,
+          "legendFormat": "No NS hostname is a CNAME (RFC 2181 §10.3)",
+          "refId": "F"
         }
       ],
       "title": "NS — status",
@@ -253,6 +274,20 @@
           "range": false,
           "legendFormat": "All NSs report same SOA serial",
           "refId": "A"
+        },
+        {
+          "expr": "min by (zone) (dnshealth_soa_mname_in_ns_set{zone=\"$zone\"}) or on() vector(0)",
+          "instant": true,
+          "range": false,
+          "legendFormat": "SOA MNAME is in zone's NS RR set",
+          "refId": "B"
+        },
+        {
+          "expr": "min by (zone) (dnshealth_soa_mname_resolves{zone=\"$zone\"}) or on() vector(0)",
+          "instant": true,
+          "range": false,
+          "legendFormat": "SOA MNAME hostname resolves to A or AAAA",
+          "refId": "C"
         }
       ],
       "title": "SOA — status",

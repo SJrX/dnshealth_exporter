@@ -93,6 +93,23 @@ grep -E '^dnshealth_ns_record\{[^}]*\} 1$' "${METRICS_FILE}" | grep -F 'zone="v6
 grep -E '^dnshealth_ns_record\{[^}]*\} 1$' "${METRICS_FILE}" | grep -F 'zone="healthy.demo."' | grep -E 'ip="[0-9a-f:]+:[0-9a-f:]+"' >/dev/null \
     || fail "healthy.demo. dual-stack: no dnshealth_ns_record series with an IPv6 ip label"
 
+echo "A4c: dnshealth_parent_delegation surfaces successful delegations"
+# Every demo zone configured in dnshealth.yml has at least an NS entry
+# in the parent zone file (demo/coredns/root/zones/demo.zone), so
+# WalkDelegation succeeds for all of them and the gauge reads 1.
+# missing-glue.demo. is the closest to a "broken" case in the demo,
+# but its parent referral DOES contain NS records (just no glue), so
+# WalkDelegation still returns a valid DelegationResult — the failure
+# is downstream (no resolvable IPs → "no nameservers found" warning).
+# The 0-value path of this gauge fires when the parent has no NS RR
+# set for the zone at all (an entirely undelegated zone in the config).
+# No demo zone currently exercises that path; the gauge's failure
+# branch is structurally correct but visually unverified here.
+grep -E '^dnshealth_parent_delegation\{zone="healthy\.demo\."\} 1$' "${METRICS_FILE}" >/dev/null \
+    || fail "dnshealth_parent_delegation for healthy.demo. is not 1"
+grep -E '^dnshealth_parent_delegation\{zone="v6-only\.demo\."\} 1$' "${METRICS_FILE}" >/dev/null \
+    || fail "dnshealth_parent_delegation for v6-only.demo. is not 1"
+
 echo "A5: build info present"
 grep -F 'dnshealth_build_info' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_build_info not present"

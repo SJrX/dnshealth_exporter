@@ -28,3 +28,27 @@ jobs:
 
       - name: Integration tests
         run: go test -tags=integration -count=1 -v ./...
+
+  demo-smoke:
+    # End-to-end regression check that catches a class of failures
+    # the Go test suite cannot: Compose YAML validity, CoreDNS Corefile
+    # / zone-file parse errors at startup, dashboard JSON structural
+    # correctness (Grafana provisioning rejects bad JSON at boot), and
+    # the exporter wired against real DNS over a real network stack.
+    # See issue #15 for the rationale and demo/smoke.sh for what it
+    # asserts.
+    needs: test
+    runs-on: ubuntu-latest
+    # Smoke itself typically takes ~2.5 min (build + readiness wait +
+    # assertions + teardown). 10 min cap gives generous slack while
+    # still failing fast if a container hangs.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      # docker + docker compose are preinstalled on ubuntu-latest, so
+      # no setup step needed. smoke.sh handles bring-up, teardown, and
+      # dumps the last 50 lines of compose logs on assertion failure
+      # for debuggability from the Actions log.
+      - name: Run demo smoke test
+        run: cd demo && ./smoke.sh

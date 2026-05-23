@@ -43,8 +43,53 @@ until curl -fsS "${METRICS_URL}" >/dev/null 2>&1; do
 done
 echo "metrics endpoint ready"
 
-step "Step 3: wait one full probe cycle (25s)"
-sleep 25
+step "Step 3: wait for first cycle to cover every configured zone"
+# Previously this was a fixed 25-second sleep, which was flaky on
+# cold builds: the first probe cycle could race a not-yet-ready
+# CoreDNS container, missing data for the newest zone (issue #39).
+# Now we (a) wait for `dnshealth_parent_delegation` to show one
+# series per configured zone — that gauge is set per-zone by
+# cycle.Runner regardless of whether downstream probes succeeded,
+# so it's the cleanest "this zone was probed at least once" signal
+# — and (b) sleep one additional probe_interval so a second cycle
+# catches anything the first cycle's race left behind.
+
+# Count configured zones — parse the YAML `zones:` block. Stops at
+# the first non-list line after the header. Works without yq.
+EXPECTED_ZONES=$(awk '
+    /^zones:/ { in_zones = 1; next }
+    in_zones && /^[[:space:]]*-[[:space:]]/ { n++; next }
+    in_zones && /^[^[:space:]#]/ { exit }
+    END { print n+0 }
+' exporter/dnshealth.yml)
+
+if [ "${EXPECTED_ZONES}" -le 0 ]; then
+    fail "could not count zones in exporter/dnshealth.yml (got ${EXPECTED_ZONES})"
+fi
+echo "expecting ${EXPECTED_ZONES} zones"
+
+DEADLINE=$(( $(date +%s) + 90 ))
+while :; do
+    SEEN=$(curl -fsS "${METRICS_URL}" 2>/dev/null \
+        | grep -c '^dnshealth_parent_delegation{' || true)
+    if [ "${SEEN}" -ge "${EXPECTED_ZONES}" ]; then
+        break
+    fi
+    if [ "$(date +%s)" -gt "${DEADLINE}" ]; then
+        printf 'ERROR: only %d/%d zones probed within 90s\n' "${SEEN}" "${EXPECTED_ZONES}" >&2
+        docker compose logs --tail 50 >&2 || true
+        docker compose down -v >/dev/null 2>&1 || true
+        exit 2
+    fi
+    sleep 1
+done
+echo "first cycle covered ${SEEN}/${EXPECTED_ZONES} zones"
+
+# Probe interval is 15s in the demo config (exporter/dnshealth.yml).
+# Sleep one interval + small margin so the SECOND cycle definitely
+# completes — closes the cold-start race where cycle 1 hit a NS
+# container before it was answering.
+sleep 20
 
 step "Step 4: capture metrics"
 curl -fsS "${METRICS_URL}" > "${METRICS_FILE}"

@@ -151,6 +151,26 @@ services:
           - ns1.dup-glue.demo.
     restart: unless-stopped
 
+  # Authoritative for ns-names-mismatch.demo. Parent's root referral
+  # advertises this zone via ns-parent-a / ns-parent-b (both glued
+  # to 172.31.0.18 = this container). The zone file served here
+  # advertises ns-self-c / ns-self-d as its own NS RR set. Counts
+  # match (2 == 2), names differ entirely — the case the old
+  # count-only NS-status row D missed (#36).
+  coredns-ns-names-mismatch:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/ns-names-mismatch/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/ns-names-mismatch/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.18
+        aliases:
+          - ns-parent-a.ns-names-mismatch.demo.
+          - ns-parent-b.ns-names-mismatch.demo.
+    restart: unless-stopped
+
   exporter:
     build:
       context: ..
@@ -173,6 +193,7 @@ services:
       - coredns-ns-mismatch
       - coredns-v6-only
       - coredns-dup-glue
+      - coredns-ns-names-mismatch
     restart: unless-stopped
 
   prometheus:

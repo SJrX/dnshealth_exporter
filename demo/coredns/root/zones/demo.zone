@@ -88,3 +88,14 @@ ns1.ns-mismatch            IN  A    172.31.0.15
 dup-glue                   IN  NS   ns1.dup-glue.demo.
 ns1.dup-glue               IN  A    172.31.0.17
 ns1.dup-glue               IN  A    172.31.0.17
+
+; ns-names-mismatch.demo. — parent advertises two NSes (ns-parent-a
+; / ns-parent-b) both glued at 172.31.0.18. The auth container at
+; .18 reports a DIFFERENT pair of NS names (ns-self-c / ns-self-d)
+; as its own NS RR set. Counts match (2 == 2), names entirely
+; differ — the case the old count-only row D check missed (#36).
+; ns-mismatch.demo. is the COUNT-divergence sibling.
+ns-names-mismatch          IN  NS   ns-parent-a.ns-names-mismatch.demo.
+ns-names-mismatch          IN  NS   ns-parent-b.ns-names-mismatch.demo.
+ns-parent-a.ns-names-mismatch  IN  A  172.31.0.18
+ns-parent-b.ns-names-mismatch  IN  A  172.31.0.18

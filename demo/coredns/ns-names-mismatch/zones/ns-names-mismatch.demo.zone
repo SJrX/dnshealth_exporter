@@ -1,0 +1,33 @@
+; ns-names-mismatch.demo. — exists to surface #36 in the demo.
+; Parent's root referral (demo/coredns/root/zones/demo.zone)
+; advertises this zone with NSes "ns-parent-a" + "ns-parent-b",
+; both glued to 172.31.0.18 (this container). The zone file
+; below advertises a COMPLETELY DIFFERENT set of NS names —
+; "ns-self-c" + "ns-self-d". Counts agree (2 == 2); names
+; entirely disagree.
+;
+; The existing ns-mismatch.demo. is in this space but exercises
+; COUNT divergence (parent=1, self=2). This zone is the case the
+; old count-only check missed.
+
+$ORIGIN ns-names-mismatch.demo.
+$TTL 30
+
+@   IN  SOA  ns-self-c.ns-names-mismatch.demo. admin.ns-names-mismatch.demo. (
+            2026052302  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+; Self-side NS RR set — deliberately different names than what the
+; parent advertised (parent says ns-parent-a / ns-parent-b; this
+; zone says ns-self-c / ns-self-d).
+@           IN  NS   ns-self-c.ns-names-mismatch.demo.
+@           IN  NS   ns-self-d.ns-names-mismatch.demo.
+
+ns-self-c   IN  A    172.31.0.18
+ns-self-d   IN  A    172.31.0.18
+
+@           IN  A    172.31.0.18

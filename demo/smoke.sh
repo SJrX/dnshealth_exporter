@@ -78,6 +78,24 @@ SELF_COUNT=$(grep -E '^dnshealth_ns_record\{.*\} 1$' "${METRICS_FILE}" | grep -F
 [ "${PARENT_COUNT}" -eq 1 ] && [ "${SELF_COUNT}" -ge 2 ] \
     || fail "ns-mismatch.demo.: expected parent=1 self>=2 NS records, got parent=${PARENT_COUNT} self=${SELF_COUNT}"
 
+echo "A3c: ns-names-mismatch.demo. surfaces names-divergent NS records (issue #36)"
+# Parent advertises ns-parent-a / ns-parent-b; auth at 172.31.0.18
+# reports ns-self-c / ns-self-d as its own NS RR set. Counts match
+# (2 == 2), names entirely differ — pre-fix the NS-status row D
+# would have passed because it only compared counts. The row D
+# verdict itself lives in Grafana (not separately exported); these
+# assertions verify the parent vs self surfaces it should compare.
+grep -E '^dnshealth_ns_record\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="ns-names-mismatch.demo."' \
+    | grep -F 'nameserver="ns-parent-a.ns-names-mismatch.demo."' \
+    | grep -F 'source="parent"' >/dev/null \
+    || fail "ns-names-mismatch.demo.: parent-side ns-parent-a series missing"
+grep -E '^dnshealth_ns_record\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="ns-names-mismatch.demo."' \
+    | grep -F 'nameserver="ns-self-c.ns-names-mismatch.demo."' \
+    | grep -F 'source="self"' >/dev/null \
+    || fail "ns-names-mismatch.demo.: self-side ns-self-c series missing"
+
 echo "A4: probe cycle ran and produced query counts"
 grep -E '^dnshealth_probe_cycle_duration_seconds [0-9]' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_probe_cycle_duration_seconds not present"

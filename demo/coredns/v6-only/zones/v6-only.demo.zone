@@ -1,0 +1,32 @@
+; v6-only.demo. — the original #23 failure mode, deliberately
+; reproduced as a demo zone. Every NS hostname has only AAAA
+; records (no A). Pre-spec-006 the exporter under-reported every
+; per-NS metric for this zone (effectively to zero); post-fix the
+; full set of series appears with v6 addresses in the ip label.
+;
+; The container itself runs at 172.31.0.16 — the exporter's
+; address_overrides map 2001:db8::16 to that v4 endpoint so the
+; demo runs on an IPv4-only host.
+
+$ORIGIN v6-only.demo.
+$TTL 30
+
+@   IN  SOA  ns1.v6-only.demo. admin.v6-only.demo. (
+            2026052201  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.v6-only.demo.
+@     IN  NS   ns2.v6-only.demo.
+
+; Self-side NS records — AAAA only, mirroring what the parent
+; advertised. No A records for the NSes — this is the whole point
+; of the zone.
+ns1   IN  AAAA 2001:db8::16
+ns2   IN  AAAA 2001:db8::16
+
+; Apex — AAAA only for consistency with the rest of the zone.
+@     IN  AAAA 2001:db8::16

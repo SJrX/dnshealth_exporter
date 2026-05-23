@@ -84,6 +84,15 @@ grep -E '^dnshealth_probe_cycle_duration_seconds [0-9]' "${METRICS_FILE}" >/dev/
 grep -E '^dnshealth_dns_queries_total\{[^}]+\} [1-9][0-9]*$' "${METRICS_FILE}" >/dev/null \
     || fail "no per-server query count above zero"
 
+echo "A4b: v6-only.demo. surfaces per-NS metric series with v6 IPs (spec 006 SC-009)"
+# Match an `ip` label whose value contains a colon — discriminator for
+# IPv6 textual form. Pre-spec-006 this zone produced no per-NS series.
+grep -E '^dnshealth_ns_record\{[^}]*\} 1$' "${METRICS_FILE}" | grep -F 'zone="v6-only.demo."' | grep -E 'ip="[0-9a-f:]+:[0-9a-f:]+"' >/dev/null \
+    || fail "v6-only.demo. has no dnshealth_ns_record series with an IPv6 ip label"
+# Also confirm the healthy zone now has v6 entries (dual-stack pattern).
+grep -E '^dnshealth_ns_record\{[^}]*\} 1$' "${METRICS_FILE}" | grep -F 'zone="healthy.demo."' | grep -E 'ip="[0-9a-f:]+:[0-9a-f:]+"' >/dev/null \
+    || fail "healthy.demo. dual-stack: no dnshealth_ns_record series with an IPv6 ip label"
+
 echo "A5: build info present"
 grep -F 'dnshealth_build_info' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_build_info not present"

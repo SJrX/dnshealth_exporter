@@ -19,7 +19,10 @@ $TTL 30
 @     IN  NS   ns2.healthy.demo.
 
 ns1   IN  A    172.31.0.11
+ns1   IN  AAAA 2001:db8::11
 ns2   IN  A    172.31.0.11
+ns2   IN  AAAA 2001:db8::11
 
 @     IN  A    172.31.0.11
+@     IN  AAAA 2001:db8::11
 www   IN  A    172.31.0.11

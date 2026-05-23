@@ -67,3 +67,20 @@ func TestA_CreatesValidRecord(t *testing.T) {
 		t.Errorf("ip: got %s, want 127.240.0.2", a.A.String())
 	}
 }
+
+func TestAAAA_CreatesValidRecord(t *testing.T) {
+	// Exercise SUT
+	rr := AAAA("ns1.example.test", "2001:db8::2")
+
+	// Verification
+	a, ok := rr.(*dns.AAAA)
+	if !ok {
+		t.Fatal("expected *dns.AAAA")
+	}
+	if a.AAAA.String() != "2001:db8::2" {
+		t.Errorf("ip: got %s, want 2001:db8::2", a.AAAA.String())
+	}
+	if a.Hdr.Rrtype != dns.TypeAAAA {
+		t.Errorf("rrtype: got %d, want %d (TypeAAAA)", a.Hdr.Rrtype, dns.TypeAAAA)
+	}
+}

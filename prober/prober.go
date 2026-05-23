@@ -95,9 +95,19 @@ func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger
 					referralNS = append(referralNS, nsRR.Ns)
 				}
 			}
+			// Accept both A and AAAA records as referral glue. Either
+			// family lets the walker reach the next server (T009b /
+			// H1). Prefer A over AAAA when both are present for the
+			// same NS hostname — A is more universally reachable from
+			// a v4-capable probe host.
 			for _, rr := range resp.Extra {
-				if a, ok := rr.(*dns.A); ok {
-					referralGlue[a.Hdr.Name] = a.A.String()
+				switch g := rr.(type) {
+				case *dns.A:
+					referralGlue[g.Hdr.Name] = g.A.String()
+				case *dns.AAAA:
+					if _, exists := referralGlue[g.Hdr.Name]; !exists {
+						referralGlue[g.Hdr.Name] = g.AAAA.String()
+					}
 				}
 			}
 
@@ -123,15 +133,31 @@ func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger
 				}
 			}
 			if nextServer == "" {
-				aMsg := new(dns.Msg)
-				aMsg.SetQuestion(referralNS[0], dns.TypeA)
-				aResp, _, err := client.ExchangeContext(ctx, aMsg, server)
-				if err != nil {
-					return nil, fmt.Errorf("resolving referral NS %s: %w", referralNS[0], err)
-				}
-				for _, rr := range aResp.Answer {
-					if a, ok := rr.(*dns.A); ok {
-						nextServer = ResolveAddress(a.A.String())
+				// Fallback: query the referral NS for both A and AAAA
+				// (T009b / H2). Use whichever family returns first.
+				for _, qtype := range [...]uint16{dns.TypeA, dns.TypeAAAA} {
+					aMsg := new(dns.Msg)
+					aMsg.SetQuestion(referralNS[0], qtype)
+					aResp, _, qerr := client.ExchangeContext(ctx, aMsg, server)
+					if qerr != nil {
+						continue
+					}
+					for _, rr := range aResp.Answer {
+						switch a := rr.(type) {
+						case *dns.A:
+							if qtype == dns.TypeA {
+								nextServer = ResolveAddress(a.A.String())
+							}
+						case *dns.AAAA:
+							if qtype == dns.TypeAAAA {
+								nextServer = ResolveAddress(a.AAAA.String())
+							}
+						}
+						if nextServer != "" {
+							break
+						}
+					}
+					if nextServer != "" {
 						break
 					}
 				}
@@ -150,13 +176,24 @@ func WalkDelegation(ctx context.Context, zone string, client *dns.Client, logger
 	return nil, fmt.Errorf("delegation walk exceeded max depth for %s", zone)
 }
 
+// extractDelegation builds a DelegationResult from a referral
+// response, expanding glue across both A and AAAA records and
+// fanning out one Nameserver entry per (hostname, IP) tuple. A
+// hostname with both A and AAAA glue produces two NSRecords / Glue
+// entries; a hostname with no glue produces one NSRecords entry
+// with IP="" (the existing "needs out-of-band resolution" signal)
+// and no Glue entry. Per spec 006 FR-002 / FR-010 (T009b).
 func extractDelegation(parentServer string, nsSection, extraSection []dns.RR, zone string) *DelegationResult {
 	result := &DelegationResult{ParentServer: parentServer}
 
-	glueMap := make(map[string]string)
+	// hostname → list of all (A + AAAA) addresses found in Additional.
+	glueMap := make(map[string][]string)
 	for _, rr := range extraSection {
-		if a, ok := rr.(*dns.A); ok {
-			glueMap[a.Hdr.Name] = a.A.String()
+		switch g := rr.(type) {
+		case *dns.A:
+			glueMap[g.Hdr.Name] = append(glueMap[g.Hdr.Name], g.A.String())
+		case *dns.AAAA:
+			glueMap[g.Hdr.Name] = append(glueMap[g.Hdr.Name], g.AAAA.String())
 		}
 	}
 
@@ -165,66 +202,147 @@ func extractDelegation(parentServer string, nsSection, extraSection []dns.RR, zo
 		if !ok {
 			continue
 		}
-		ip := glueMap[nsRR.Ns]
-		result.NSRecords = append(result.NSRecords, Nameserver{
-			Hostname: nsRR.Ns,
-			IP:       ip,
-		})
-		if ip != "" {
-			result.Glue = append(result.Glue, Nameserver{
+		ips := glueMap[nsRR.Ns]
+		if len(ips) == 0 {
+			// No glue for this hostname. Emit a single sentinel
+			// entry with IP="" so the caller knows to resolve it
+			// out-of-band (preserves the existing #14 contract).
+			result.NSRecords = append(result.NSRecords, Nameserver{
 				Hostname: nsRR.Ns,
-				IP:       ip,
+				IP:       "",
 			})
+			continue
+		}
+		for _, ip := range ips {
+			entry := Nameserver{Hostname: nsRR.Ns, IP: ip}
+			result.NSRecords = append(result.NSRecords, entry)
+			result.Glue = append(result.Glue, entry)
 		}
 	}
 
 	return result
 }
 
-// ResolveHostname resolves a DNS hostname to an IPv4 address by
-// walking the delegation chain from root.
-func ResolveHostname(ctx context.Context, hostname string, client *dns.Client, logger *slog.Logger) (string, error) {
+// ResolveHostnames resolves a DNS hostname to all of its A and AAAA
+// addresses by walking the delegation chain from root for each
+// family independently.
+//
+// Return semantics (per spec FR-001/003/009 + research R-3):
+//   - Non-empty slice + nil error: at least one address found across
+//     the two families. A addresses appear first, then AAAA.
+//   - Empty slice + nil error: hostname has neither A nor AAAA
+//     records (NODATA on both families, or referral chains with no
+//     usable glue). Legitimately unresolvable; caller drops it.
+//   - Non-nil error: BOTH families failed at the protocol level
+//     (timeout, SERVFAIL, network error). Caller logs and skips.
+//
+// Partial-success cases (A succeeds with records, AAAA fails at the
+// protocol level — or vice versa) return the successful family with
+// nil top-level error; the failed family's failure is logged at
+// WARN. This preserves visibility on the successful family rather
+// than collapsing the whole hostname.
+func ResolveHostnames(ctx context.Context, hostname string, client *dns.Client, logger *slog.Logger) ([]string, error) {
 	hostname = dns.Fqdn(hostname)
+
+	ipv4s, errV4 := resolveOneFamily(ctx, hostname, dns.TypeA, client, logger)
+	ipv6s, errV6 := resolveOneFamily(ctx, hostname, dns.TypeAAAA, client, logger)
+
+	if errV4 != nil && errV6 != nil {
+		return nil, fmt.Errorf("both A and AAAA resolution failed for %s: A: %v; AAAA: %v",
+			hostname, errV4, errV6)
+	}
+	if errV4 != nil {
+		logger.Warn("A resolution failed; AAAA succeeded",
+			"hostname", hostname, "err", errV4)
+	}
+	if errV6 != nil {
+		logger.Warn("AAAA resolution failed; A succeeded",
+			"hostname", hostname, "err", errV6)
+	}
+
+	out := make([]string, 0, len(ipv4s)+len(ipv6s))
+	out = append(out, ipv4s...)
+	out = append(out, ipv6s...)
+	return out, nil
+}
+
+// resolveOneFamily walks the delegation chain looking for records
+// of a single type (TypeA or TypeAAAA). Symmetric per family —
+// each call is independent.
+//
+// Returns:
+//   - non-empty slice + nil: records found.
+//   - empty slice + nil: legitimately no records of this type
+//     (NODATA, or referral chain runs out of usable glue).
+//   - nil + non-nil error: protocol failure (timeout, SERVFAIL).
+//
+// The walker's glue extraction accepts both A and AAAA records —
+// either family is acceptable as the address to query for the next
+// hop, since both families of address can reach the same server (a
+// dual-stack server answers either way).
+func resolveOneFamily(ctx context.Context, hostname string, qtype uint16, client *dns.Client, logger *slog.Logger) ([]string, error) {
 	server := RootServers[0]
 
 	for depth := 0; depth < 10; depth++ {
 		msg := new(dns.Msg)
-		msg.SetQuestion(hostname, dns.TypeA)
+		msg.SetQuestion(hostname, qtype)
 		msg.RecursionDesired = false
 
 		resp, _, err := client.ExchangeContext(ctx, msg, server)
 		if err != nil {
-			return "", fmt.Errorf("querying %s for %s: %w", server, hostname, err)
+			return nil, fmt.Errorf("querying %s for %s: %w", server, hostname, err)
 		}
 
+		var found []string
 		for _, rr := range resp.Answer {
-			if a, ok := rr.(*dns.A); ok {
-				return a.A.String(), nil
+			switch a := rr.(type) {
+			case *dns.A:
+				if qtype == dns.TypeA {
+					found = append(found, a.A.String())
+				}
+			case *dns.AAAA:
+				if qtype == dns.TypeAAAA {
+					found = append(found, a.AAAA.String())
+				}
+			}
+		}
+		if len(found) > 0 {
+			return found, nil
+		}
+
+		// No answer of the queried type. Try to follow a referral.
+		// Glue may be A or AAAA — the walker accepts either.
+		glueMap := make(map[string]string)
+		for _, rr := range resp.Extra {
+			switch g := rr.(type) {
+			case *dns.A:
+				glueMap[g.Hdr.Name] = g.A.String()
+			case *dns.AAAA:
+				// Prefer A if already present (more universally
+				// reachable from a v4-capable probe host).
+				if _, exists := glueMap[g.Hdr.Name]; !exists {
+					glueMap[g.Hdr.Name] = g.AAAA.String()
+				}
 			}
 		}
 
-		if len(resp.Ns) > 0 {
-			glueMap := make(map[string]string)
-			for _, rr := range resp.Extra {
-				if a, ok := rr.(*dns.A); ok {
-					glueMap[a.Hdr.Name] = a.A.String()
+		nextServer := ""
+		for _, rr := range resp.Ns {
+			if nsRR, ok := rr.(*dns.NS); ok {
+				if ip, ok := glueMap[nsRR.Ns]; ok {
+					nextServer = ResolveAddress(ip)
+					break
 				}
 			}
-
-			for _, rr := range resp.Ns {
-				if nsRR, ok := rr.(*dns.NS); ok {
-					if ip, ok := glueMap[nsRR.Ns]; ok {
-						server = ResolveAddress(ip)
-						goto nextHop
-					}
-				}
-			}
-			return "", fmt.Errorf("referral from %s has no glue for %s", server, hostname)
 		}
-
-		return "", fmt.Errorf("no answer and no referral from %s for %s", server, hostname)
-	nextHop:
+		if nextServer == "" {
+			// No usable referral and no answer — NODATA. Empty
+			// slice + nil error is the legitimate "no records of
+			// this type at this name" outcome.
+			return nil, nil
+		}
+		server = nextServer
 	}
 
-	return "", fmt.Errorf("resolution exceeded max depth for %s", hostname)
+	return nil, fmt.Errorf("resolution exceeded max depth for %s", hostname)
 }

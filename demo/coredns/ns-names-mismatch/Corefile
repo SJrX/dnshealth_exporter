@@ -1,0 +1,15 @@
+# Authoritative for ns-names-mismatch.demo. The parent (root zone)
+# advertises this delegation with NSes "ns-parent-a" and
+# "ns-parent-b", both glued to 172.31.0.18 (this container). When
+# the exporter queries this container for the zone's NS RR set, it
+# gets back "ns-self-c" and "ns-self-d" instead — same COUNT (2),
+# entirely DIFFERENT names. Exercises #36: pre-fix the NS-status
+# row "Parent and self report same NS records" only compared
+# counts and would have passed this configuration despite the
+# obvious mismatch; post-fix it correctly FAILs.
+
+ns-names-mismatch.demo. {
+    file /zones/ns-names-mismatch.demo.zone
+    log
+    errors
+}

@@ -12,6 +12,7 @@ zones:
   - ns-mismatch.demo.
   - v6-only.demo.
   - dup-glue.demo.
+  - ns-names-mismatch.demo.
 
 # Tighter than the 60s production default so iteration sees changes
 # within ~20 seconds.

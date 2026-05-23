@@ -132,12 +132,19 @@ var nsStatusChecks = []statusCheck{
 			"**Why FAIL matters**: Open recursive resolvers can be abused for DNS amplification / reflection attacks.  \n" +
 			"**Investigate**: NS records (from the zone) — `Recursion` column highlights the offending NS.",
 	},
+	// Set-equality on nameserver names: for every (zone, nameserver)
+	// tuple in either source, BOTH source values must be present
+	// (count by (zone, nameserver) over the source-collapsed series
+	// must equal 2 everywhere). Previously this row checked only
+	// that the counts matched — which passed when parent and self
+	// advertised the same NUMBER of NSes with entirely different
+	// names. See #36.
 	{"D",
-		`((count by (zone) (group by (zone, nameserver) (dnshealth_ns_record{source="parent",zone="$zone"}))) == bool (count by (zone) (group by (zone, nameserver) (dnshealth_ns_record{source="self",zone="$zone"})))) and on(zone) (count by (zone) (dnshealth_ns_record{source="self",zone="$zone"}) > bool 0) or on() vector(0)`,
+		`(min by (zone) (count by (zone, nameserver) (group by (zone, nameserver, source) (dnshealth_ns_record{zone="$zone"}))) == bool 2) or on() vector(0)`,
 		"Parent and self report same NS records",
-		"**Metric**: count comparison of `dnshealth_ns_record{source=\"parent\"}` vs `source=\"self\"`  \n" +
-			"**Why FAIL matters**: The parent's view of the NS set diverges from what the zone itself advertises; resolvers may pick a stale or wrong set.  \n" +
-			"**Investigate**: NS records (from parent) and NS records (from the zone) tables side-by-side.",
+		"**Metric**: per-nameserver count of distinct sources in `dnshealth_ns_record`, aggregated `min by (zone) == 2`  \n" +
+			"**Why FAIL matters**: At least one NS hostname appears on only one side — parent and zone disagree on the NS set, so resolvers picking either side may reach servers the other doesn't know about. The check is set-equality on **names**; IP-level glue disagreement is a separate concern (#37).  \n" +
+			"**Investigate**: NS records (from parent) and NS records (from the zone) tables side-by-side — the hostname appearing in only one table is the discrepancy.",
 	},
 	// min-aggregation: PASS only if EVERY NS hostname is
 	// syntactically valid; any one bad hostname fails the zone.

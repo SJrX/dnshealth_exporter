@@ -53,6 +53,29 @@ to appear.
 | `missing-glue.demo.` | Parent NS without A glue, hostname unresolvable | No metrics for this zone — delegation walk fails entirely. Zone won't appear in the dashboard's `$zone` selector (the absence is the signal). |
 | `lame-nameserver.demo.` | "Authoritative" server is actually a misconfigured forwarder with no real authoritative chain | SOA check fails (`query_success{check="soa"}=0`) for this zone. (CoreDNS's `forward` plugin does not set RA on referral responses, so the recursion-available metric reads 0 — the dashboard's recursion panel is still useful for real-world deployments where the exporter is pointed at actual recursive resolvers.) |
 | `ns-mismatch.demo.` | Parent advertises 1 NS; the auth server reports 2 different NSs internally | "Parent and self report same NS records" = FAIL. The Parent records table shows the parent's view (1 NS); the per-NS SOA table populates from the self view (2 NSs). |
+| `v6-only.demo.` | Every NS has only an AAAA record (no A) | All per-NS metrics surface with IPv6 addresses in the `ip` label. Pre-spec-006 this zone produced no per-NS series at all. |
+
+`healthy.demo.` also doubles as the **dual-stack** demonstration —
+its NSes have both A and AAAA records, so every per-NS metric
+appears twice (once per IP family).
+
+### IPv6 patterns + the v4-only host trick
+
+The demo's Docker Compose network is IPv4-only by design — enabling
+IPv6 on a Docker bridge requires per-host setup that's not portable.
+Instead, the demo's zone files declare AAAA glue at RFC 3849
+documentation addresses (`2001:db8::11`, `2001:db8::16`), and the
+exporter's `address_overrides` (see
+[`exporter/dnshealth.yml`](exporter/dnshealth.yml)) map those v6
+addresses back to the corresponding v4 container endpoints. The
+exporter's data model and metric labels carry the v6 addresses
+verbatim; the network connections go to v4 destinations the host
+can reach. This is the supported pattern for testing IPv6 paths on
+hosts that don't have functional IPv6 connectivity.
+
+To see the patterns visually: switch the dashboard's `$zone`
+variable between `healthy.demo.` (dual-stack) and `v6-only.demo.`
+(IPv6-only) and watch the **NS records** tables change shape.
 
 ## Override host ports
 

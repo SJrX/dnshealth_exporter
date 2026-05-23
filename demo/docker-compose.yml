@@ -110,6 +110,26 @@ services:
           - ns1.ns-mismatch.demo.
     restart: unless-stopped
 
+  # Authoritative for v6-only.demo. — demonstrates the spec 006 /
+  # #23 fix: a zone whose NSes have only AAAA records. The container
+  # binds to v4 (172.31.0.16) but the delegation and the auth zone
+  # both advertise AAAA only. The exporter's address_overrides
+  # below map 2001:db8::16 back to this container so the demo runs
+  # on an IPv4-only Docker bridge.
+  coredns-v6-only:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/v6-only/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/v6-only/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.16
+        aliases:
+          - ns1.v6-only.demo.
+          - ns2.v6-only.demo.
+    restart: unless-stopped
+
   exporter:
     build:
       context: ..

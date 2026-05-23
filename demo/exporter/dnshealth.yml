@@ -10,6 +10,7 @@ zones:
   - missing-glue.demo.
   - lame-nameserver.demo.
   - ns-mismatch.demo.
+  - v6-only.demo.
 
 # Tighter than the 60s production default so iteration sees changes
 # within ~20 seconds.
@@ -26,3 +27,19 @@ zone_deadline: 15s
 # Docker DNS inside the demo network.
 root_servers:
   - coredns-root:53
+
+# IPv6 address overrides — spec 006. The demo's Docker bridge is
+# IPv4-only by design, but the zones advertise AAAA glue at
+# 2001:db8:: addresses (RFC 3849 documentation prefix). These
+# overrides route every v6 lookup back to the corresponding v4
+# container endpoint via Docker DNS. The exporter sees v6 in its
+# data model and metric labels (FR-014); the actual queries
+# transit v4.
+#
+# Mappings:
+#   2001:db8::11 → coredns-healthy (also serves both NS aliases of
+#                  healthy.demo.)
+#   2001:db8::16 → coredns-v6-only (the IPv6-only demo zone)
+address_overrides:
+  "2001:db8::11": "coredns-healthy:53"
+  "2001:db8::16": "coredns-v6-only:53"

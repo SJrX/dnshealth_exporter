@@ -29,10 +29,29 @@ ns2   IN  A    172.31.0.11
 ; --- Delegations to demo zones below ---
 
 ; healthy.demo. — fully healthy zone with in-bailiwick NSs + glue.
+; Glue is dual-stack: parent provides both A and AAAA for each NS.
+; The AAAA addresses use the RFC 3849 documentation prefix and are
+; mapped to the coredns-healthy container via the exporter's
+; address_overrides — the demo runs on an IPv4-only Docker bridge,
+; the v6 addresses surface only in the exporter's data model and
+; metric labels (FR-014). See spec 006 US3.
 healthy                    IN  NS   ns1.healthy.demo.
 healthy                    IN  NS   ns2.healthy.demo.
 ns1.healthy                IN  A    172.31.0.11
+ns1.healthy                IN  AAAA 2001:db8::11
 ns2.healthy                IN  A    172.31.0.11
+ns2.healthy                IN  AAAA 2001:db8::11
+
+; v6-only.demo. — demonstrates the original #23 failure mode now
+; fixed: parent advertises NS records with AAAA glue ONLY (no A
+; glue). Pre-spec-006 this zone would have produced zero per-NS
+; metric series; post-fix every series appears with the v6 address
+; in the ip label. The AAAA addresses are mapped to coredns-v6-only
+; (172.31.0.16) via the exporter's address_overrides.
+v6-only                    IN  NS   ns1.v6-only.demo.
+v6-only                    IN  NS   ns2.v6-only.demo.
+ns1.v6-only                IN  AAAA 2001:db8::16
+ns2.v6-only                IN  AAAA 2001:db8::16
 
 ; soa-serial-mismatch.demo. — two primaries with divergent SOA
 ; serials (100 vs 101). Glue at 172.31.0.12 / 172.31.0.13.

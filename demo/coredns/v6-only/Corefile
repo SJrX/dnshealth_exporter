@@ -1,0 +1,14 @@
+# Authoritative for v6-only.demo. — the IPv6-only-NS pattern per
+# spec 006 US3 / FR-015 (b). The container runs at a v4 address
+# (172.31.0.16) on the demo's IPv4-only Compose network. The "v6-
+# only-ness" lives in the *delegation* — the root zone advertises
+# AAAA glue only for this zone's NSs (no A glue) — and in the
+# auth-side records below (AAAA only for ns1 / ns2). The exporter's
+# address_overrides route the v6 lookups back to this container
+# via v4.
+
+v6-only.demo. {
+    file /zones/v6-only.demo.zone
+    log
+    errors
+}

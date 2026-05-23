@@ -170,20 +170,29 @@ func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config)
 		r.Logger.Debug("delegation cache miss, stored", "zone", zone)
 	}
 
-	// Discover nameservers — resolve missing IPs (no-glue case)
+	// Discover nameservers — resolve missing IPs (no-glue case) and
+	// fan out one Nameserver per resolved address (both A and AAAA
+	// families, any count) per spec 006 / contracts/nameserver-fanout.md.
 	var nameservers []prober.Nameserver
 	for _, ns := range delegation.NSRecords {
 		if ns.IP != "" {
+			// Parent supplied glue inline — use directly. After
+			// extractDelegation is extended for AAAA (T009b), this
+			// branch also handles the multi-IP-per-hostname case
+			// because delegation.NSRecords itself may carry
+			// multiple entries for one hostname.
 			nameservers = append(nameservers, ns)
 			continue
 		}
-		ip, err := prober.ResolveHostname(ctx, ns.Hostname, client, r.Logger)
+		ips, err := prober.ResolveHostnames(ctx, ns.Hostname, client, r.Logger)
 		if err != nil {
 			r.Logger.Warn("could not resolve NS hostname",
 				"zone", zone, "ns", ns.Hostname, "err", err)
 			continue
 		}
-		nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+		for _, ip := range ips {
+			nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+		}
 	}
 
 	if len(nameservers) == 0 {

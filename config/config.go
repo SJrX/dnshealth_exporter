@@ -43,9 +43,25 @@ type Config struct {
 // ResolveAddress returns the address to query for a given
 // nameserver IP. If an override exists, it's used; otherwise
 // the IP is returned with the default DNS port (53).
+//
+// The lookup key is canonicalised via net.ParseIP(ip).String() so
+// that operator-supplied keys in the override map (canonicalised
+// at load time by canonicaliseOverrideKeys below) match runtime
+// IPs regardless of textual form — e.g. "2001:DB8::1" matches
+// "2001:db8::1" matches "2001:0db8:0000:0000:0000:0000:0000:0001".
+// All three canonicalise to the same RFC 5952 short form.
+//
+// If the input is not a parseable IP (shouldn't happen at runtime
+// — probers always pass valid IPs from miekg/dns), fall through to
+// net.JoinHostPort with the original string and let the downstream
+// query surface the error.
 func (c *Config) ResolveAddress(ip string) string {
 	if c.AddressOverrides != nil {
-		if override, ok := c.AddressOverrides[ip]; ok {
+		key := ip
+		if parsed := net.ParseIP(ip); parsed != nil {
+			key = parsed.String()
+		}
+		if override, ok := c.AddressOverrides[key]; ok {
 			return override
 		}
 	}
@@ -66,11 +82,41 @@ func Load(path string) (*Config, error) {
 
 	cfg.applyDefaults()
 
+	if err := cfg.canonicaliseOverrideKeys(); err != nil {
+		return nil, err
+	}
+
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+// canonicaliseOverrideKeys rewrites every key in AddressOverrides
+// to its canonical RFC 5952 / IPv4-dotted form via net.ParseIP. Any
+// key that does not parse as an IP is rejected with a clear error
+// (today such keys would silently never match anything). Per spec
+// 006 FR-013.
+func (c *Config) canonicaliseOverrideKeys() error {
+	if len(c.AddressOverrides) == 0 {
+		return nil
+	}
+	canonical := make(map[string]string, len(c.AddressOverrides))
+	for k, v := range c.AddressOverrides {
+		parsed := net.ParseIP(k)
+		if parsed == nil {
+			return fmt.Errorf("config: address_overrides key %q is not a valid IP address", k)
+		}
+		key := parsed.String()
+		if existing, dup := canonical[key]; dup && existing != v {
+			return fmt.Errorf("config: address_overrides key %q collides with another entry "+
+				"after canonicalisation (both canonicalise to %q with different values)", k, key)
+		}
+		canonical[key] = v
+	}
+	c.AddressOverrides = canonical
+	return nil
 }
 
 func (c *Config) applyDefaults() {

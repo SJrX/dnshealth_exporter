@@ -139,15 +139,19 @@ func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry 
 	var nameservers []prober.Nameserver
 	for _, ns := range delegation.NSRecords {
 		if ns.IP != "" {
+			// Parent glue inline (potentially fanned out per IP by
+			// extractDelegation after T009b lands).
 			nameservers = append(nameservers, ns)
 			continue
 		}
-		ip, err := prober.ResolveHostname(ctx, ns.Hostname, client, logger)
+		ips, err := prober.ResolveHostnames(ctx, ns.Hostname, client, logger)
 		if err != nil {
 			f.t.Logf("Resolve hostname error: %v", err)
 			continue
 		}
-		nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+		for _, ip := range ips {
+			nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+		}
 	}
 
 	results, err := fn(ctx, zone, nameservers, delegation, client, logger)
@@ -211,6 +215,9 @@ func startTestServer(t testing.TB, srv *testServer) {
 
 		if srv.referral && len(matched) > 0 && qtype == mdns.TypeNS {
 			// Referral mode: NS records go in Authority, glue in Additional.
+			// Both A and AAAA records matching an NS hostname are attached
+			// as glue — real-world parent referrals may include either or
+			// both families; the exporter must consume what's there.
 			m.Authoritative = false
 			m.Ns = matched
 			for _, ns := range matched {
@@ -219,8 +226,15 @@ func startTestServer(t testing.TB, srv *testServer) {
 					continue
 				}
 				for _, rr := range srv.records {
-					if a, ok := rr.(*mdns.A); ok && a.Header().Name == nsRR.Ns {
-						m.Extra = append(m.Extra, a)
+					switch g := rr.(type) {
+					case *mdns.A:
+						if g.Header().Name == nsRR.Ns {
+							m.Extra = append(m.Extra, g)
+						}
+					case *mdns.AAAA:
+						if g.Header().Name == nsRR.Ns {
+							m.Extra = append(m.Extra, g)
+						}
 					}
 				}
 			}
@@ -240,7 +254,8 @@ func startTestServer(t testing.TB, srv *testServer) {
 			m.RecursionAvailable = srv.options.RecursionAvailable
 			m.Answer = matched
 
-			// Add glue in Additional for NS queries
+			// Add glue in Additional for NS queries — both A and AAAA
+			// matching an NS hostname.
 			if qtype == mdns.TypeNS {
 				for _, ans := range m.Answer {
 					nsRR, ok := ans.(*mdns.NS)
@@ -248,8 +263,15 @@ func startTestServer(t testing.TB, srv *testServer) {
 						continue
 					}
 					for _, rr := range srv.records {
-						if a, ok := rr.(*mdns.A); ok && a.Header().Name == nsRR.Ns {
-							m.Extra = append(m.Extra, a)
+						switch g := rr.(type) {
+						case *mdns.A:
+							if g.Header().Name == nsRR.Ns {
+								m.Extra = append(m.Extra, g)
+							}
+						case *mdns.AAAA:
+							if g.Header().Name == nsRR.Ns {
+								m.Extra = append(m.Extra, g)
+							}
 						}
 					}
 				}
@@ -321,12 +343,20 @@ func findReferral(records []mdns.RR, qname string) (ns []mdns.RR, extra []mdns.R
 			}
 		}
 		if len(ns) > 0 {
-			// Found a referral — collect glue
+			// Found a referral — collect glue (both A and AAAA matching
+			// the NS hostname, mirroring real-world Additional sections).
 			for _, nsRR := range ns {
 				nsName := nsRR.(*mdns.NS).Ns
 				for _, rr := range records {
-					if a, ok := rr.(*mdns.A); ok && a.Header().Name == nsName {
-						extra = append(extra, a)
+					switch g := rr.(type) {
+					case *mdns.A:
+						if g.Header().Name == nsName {
+							extra = append(extra, g)
+						}
+					case *mdns.AAAA:
+						if g.Header().Name == nsName {
+							extra = append(extra, g)
+						}
 					}
 				}
 			}

@@ -108,8 +108,21 @@ func ProbeGlue(ctx context.Context, zone string, nameservers []Nameserver, deleg
 	return results, nil
 }
 
-// querySelfForNSAndA queries an authoritative NS for its own NS records
-// and resolves their A records.
+// querySelfForNSAndA queries an authoritative NS for its own NS
+// records and resolves their addresses across both IPv4 and IPv6
+// families.
+//
+// For each self-reported NS hostname, both TypeA and TypeAAAA are
+// queried against the same auth server. Every address returned (any
+// count, any family) produces one Nameserver entry in both
+// nsRecords and aRecords. Pre-issue-#23 this function queried only
+// TypeA and stopped at the first A record — silently dropping
+// IPv6-only NSes and additional A records (anycast clusters).
+//
+// Per-family query failures are logged at DEBUG and do not abort
+// the per-NS loop — a hostname for which AAAA times out can still
+// surface its v4 entries from the successful A query. Matches the
+// partial-success semantics of ResolveHostnames (research R-3).
 func querySelfForNSAndA(ctx context.Context, zone string, ns Nameserver, client *dns.Client, logger *slog.Logger) (nsRecords []Nameserver, aRecords []Nameserver, err error) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(zone), dns.TypeNS)
@@ -125,19 +138,32 @@ func querySelfForNSAndA(ctx context.Context, zone string, ns Nameserver, client 
 			continue
 		}
 
-		aMsg := new(dns.Msg)
-		aMsg.SetQuestion(nsRR.Ns, dns.TypeA)
-		aResp, _, err := ExchangeWithRetry(ctx, client, aMsg, ResolveAddress(ns.IP))
-		if err != nil {
-			logger.Debug("could not resolve NS via authoritative", "ns", nsRR.Ns, "server", ns.IP, "err", err)
-			continue
-		}
+		// Query both families. Each may NODATA legitimately (zone
+		// has no AAAA, etc.) — that's not a failure, just an empty
+		// answer.
+		for _, qtype := range [...]uint16{dns.TypeA, dns.TypeAAAA} {
+			aMsg := new(dns.Msg)
+			aMsg.SetQuestion(nsRR.Ns, qtype)
+			aResp, _, err := ExchangeWithRetry(ctx, client, aMsg, ResolveAddress(ns.IP))
+			if err != nil {
+				logger.Debug("could not resolve NS via authoritative",
+					"ns", nsRR.Ns, "server", ns.IP, "qtype", dns.TypeToString[qtype], "err", err)
+				continue
+			}
 
-		for _, aRR := range aResp.Answer {
-			if a, ok := aRR.(*dns.A); ok {
-				nsRecords = append(nsRecords, Nameserver{Hostname: nsRR.Ns, IP: a.A.String()})
-				aRecords = append(aRecords, Nameserver{Hostname: nsRR.Ns, IP: a.A.String()})
-				break
+			for _, aRR := range aResp.Answer {
+				switch a := aRR.(type) {
+				case *dns.A:
+					if qtype == dns.TypeA {
+						nsRecords = append(nsRecords, Nameserver{Hostname: nsRR.Ns, IP: a.A.String()})
+						aRecords = append(aRecords, Nameserver{Hostname: nsRR.Ns, IP: a.A.String()})
+					}
+				case *dns.AAAA:
+					if qtype == dns.TypeAAAA {
+						nsRecords = append(nsRecords, Nameserver{Hostname: nsRR.Ns, IP: a.AAAA.String()})
+						aRecords = append(aRecords, Nameserver{Hostname: nsRR.Ns, IP: a.AAAA.String()})
+					}
+				}
 			}
 		}
 	}

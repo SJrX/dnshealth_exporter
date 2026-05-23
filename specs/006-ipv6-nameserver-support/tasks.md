@@ -31,7 +31,7 @@ Phase 2 Foundational and the user-story phases primarily add tests.
 **Purpose**: Pre-flight verification. No new dependencies, no new
 package layout — this feature touches existing code only.
 
-- [ ] T001 Verify branch state: `git status` shows clean working tree
+- [X] T001 Verify branch state: `git status` shows clean working tree
   on `006-ipv6-nameserver-support` branched from `origin/main`.
   `go build ./...` and `go test -tags=integration ./...` both pass
   at HEAD (so any subsequent failure is from this work, not
@@ -48,7 +48,7 @@ fixtures. The per-user-story phases then add coverage tests.
 
 These tasks share files extensively — sequence them carefully.
 
-- [ ] T002 [P] Add `AAAA(name, ipv6 string) dns.RR` helper to
+- [X] T002 [P] Add `AAAA(name, ipv6 string) dns.RR` helper to
   `testutil/records.go`, mirroring the existing `A()` helper's
   signature, return shape, and default-with-override pattern. Add
   a corresponding unit test `TestAAAA_CreatesValidRecord` in
@@ -56,7 +56,7 @@ These tasks share files extensively — sequence them carefully.
   `TestA_CreatesValidRecord` (per constitution Principle VIII —
   symmetric structure). Per FR-016 and contracts/nameserver-fanout.md.
 
-- [ ] T003 [P] Extend `testutil/fixture.go`'s referral-mode handler
+- [X] T003 [P] Extend `testutil/fixture.go`'s referral-mode handler
   (currently `if srv.referral && qtype == TypeNS` block around lines
   212-226) so it also attaches `*mdns.AAAA` records as glue in the
   Additional section when the AAAA's `Header().Name` matches an NS
@@ -64,7 +64,7 @@ These tasks share files extensively — sequence them carefully.
   Same change needed in the `findReferral` helper (lines 298-336)
   for the recursive-referral branch. Per FR-017.
 
-- [ ] T004 Rename `prober.ResolveHostname` to `prober.ResolveHostnames`
+- [X] T004 Rename `prober.ResolveHostname` to `prober.ResolveHostnames`
   in `prober/prober.go`. Change signature from
   `(ctx, hostname, client, logger) (string, error)` to
   `(ctx, hostname, client, logger) ([]string, error)`. Implementation
@@ -76,7 +76,7 @@ These tasks share files extensively — sequence them carefully.
   top-level error; the failed-family failure is logged at WARN.
   Per FR-001 + R-3 + contracts/nameserver-fanout.md.
 
-- [ ] T005 Update `cycle/runner.go::probeZone` (around lines 173-187)
+- [X] T005 Update `cycle/runner.go::probeZone` (around lines 173-187)
   to call the renamed `ResolveHostnames` and fan out one
   `prober.Nameserver{Hostname, IP}` entry per returned IP. The
   existing in-line `if ns.IP != "" { append; continue }` branch
@@ -84,12 +84,12 @@ These tasks share files extensively — sequence them carefully.
   no-glue branch now produces N entries instead of one. Per FR-002 +
   contracts/nameserver-fanout.md.
 
-- [ ] T006 Update `testutil/fixture.go::Probe` (around lines 139-151)
+- [X] T006 Update `testutil/fixture.go::Probe` (around lines 139-151)
   with the same `ResolveHostnames` rename + per-IP fan-out as T005.
   The two callers are intentionally kept in sync (production runner
   and test runner exercise the same resolution shape).
 
-- [ ] T007 Update `prober/glue.go::querySelfForNSAndA` (around lines
+- [X] T007 Update `prober/glue.go::querySelfForNSAndA` (around lines
   111-142) to query both `dns.TypeA` and `dns.TypeAAAA` when resolving
   each self-reported NS hostname. Emit one `Nameserver{Hostname, IP}`
   entry per resolved address into both `nsRecords` and `aRecords`.
@@ -97,7 +97,7 @@ These tasks share files extensively — sequence them carefully.
   first A); after this change it returns all addresses across both
   families. Per FR-005 + FR-006.
 
-- [ ] T008 Update `config/config.go::ResolveAddress` (the method on
+- [X] T008 Update `config/config.go::ResolveAddress` (the method on
   `*Config`) to canonicalise the lookup IP via
   `net.ParseIP(ip).String()` before consulting the
   `AddressOverrides` map. If `ParseIP` returns nil (the input wasn't
@@ -105,7 +105,7 @@ These tasks share files extensively — sequence them carefully.
   "53")` — preserves today's behaviour for the unparseable case.
   Per FR-013 + R-2 + contracts/address-override.md.
 
-- [ ] T009 Update `config/config.go::Load` (or wherever the YAML
+- [X] T009 Update `config/config.go::Load` (or wherever the YAML
   decoder produces the `AddressOverrides` map) to canonicalise each
   map key via `net.ParseIP(k).String()` at load time. Reject any
   key for which `ParseIP` returns nil with a clear error
@@ -115,7 +115,7 @@ These tasks share files extensively — sequence them carefully.
   (`2001:0db8:0000:0000:0000:0000:0000:0001`) matches a runtime
   lookup for `2001:db8::1`.
 
-- [ ] T009b **(Analyze remediation: C1 + H1 + H2)** Extend
+- [X] T009b **(Analyze remediation: C1 + H1 + H2)** Extend
   `prober/prober.go`'s glue-extraction sites to handle AAAA records
   and multi-IP-per-hostname. Three call sites, same file, same
   shape of edit:
@@ -144,7 +144,7 @@ These tasks share files extensively — sequence them carefully.
   the resolver never runs for hostnames whose parent supplied
   (only A) glue. Per FR-002, FR-004, FR-010, FR-011.
 
-- [ ] T010 Regression gate: from repo root, run `go build ./...`
+- [X] T010 Regression gate: from repo root, run `go build ./...`
   (must succeed), `go vet ./...` (must be clean), and
   `go test -tags=integration -count=1 ./...` (full existing suite
   must pass). All pre-existing IPv4-only tests must remain green.
@@ -169,7 +169,7 @@ label. Pre-fix this NS was silently absent from `/metrics`.
 run a probe cycle, grep `/metrics` for the v6 address. Series
 exists for every check (soa, recursion, glue, ns_record).
 
-- [ ] T011 [US1] Create `prober/glue_ipv6_test.go` under build tag
+- [X] T011 [US1] Create `prober/glue_ipv6_test.go` under build tag
   `//go:build integration`. Three-phase Meszaros structure (per
   constitution Principle VIII).
 
@@ -207,7 +207,7 @@ exists for every check (soa, recursion, glue, ns_record).
   T007 is needed for the self-side queries to issue AAAA.
   Post-fix it passes.
 
-- [ ] T012 [US1] Verify the new test fails on a pre-T007 codebase
+- [X] T012 [US1] Verified — with T009b's extractDelegation change surgically reverted, the test fails on the parent-side assertion (line 79: `dnshealth_ns_record with labels {ip:2001:db8::2 ..., source:parent} not found`). Restored, passes again. Confirms T009b is load-bearing for the parent-side v6 path.
   (sanity proof the test catches the bug). Method: `git stash` the
   glue.go changes, run only this test, confirm failure; pop the
   stash, re-run, confirm pass. Document the verification outcome

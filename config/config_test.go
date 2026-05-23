@@ -187,3 +187,62 @@ func TestLoad_InvalidDomainName(t *testing.T) {
 		t.Fatal("expected error for invalid domain name, got nil")
 	}
 }
+
+func TestLoad_AddressOverrides_IPv6KeyCanonicalisation(t *testing.T) {
+	// Fixture Setup — write an IPv6 override key in expanded form
+	// (with leading zeros, uppercase). The lookup will be made with
+	// the canonical short form. Per spec 006 FR-013.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	os.WriteFile(path, []byte(`zones:
+  - example.com
+address_overrides:
+  "2001:0DB8:0000:0000:0000:0000:0000:0001": "auth.local:53"
+`), 0644)
+
+	// Exercise SUT — load, then resolve the same address in canonical form
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+	got := cfg.ResolveAddress("2001:db8::1")
+
+	// Verification — the canonical-short-form lookup must hit the
+	// expanded-form key after canonicalisation on both sides.
+	if got != "auth.local:53" {
+		t.Errorf("override lookup mismatch: got %q, want %q (canonicalisation broken)",
+			got, "auth.local:53")
+	}
+}
+
+func TestLoad_AddressOverrides_RejectsInvalidIPKey(t *testing.T) {
+	// Fixture Setup — non-IP key in the override map
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	os.WriteFile(path, []byte(`zones:
+  - example.com
+address_overrides:
+  "not-an-ip": "auth.local:53"
+`), 0644)
+
+	// Exercise SUT
+	_, err := Load(path)
+
+	// Verification — must fail with a clear error mentioning the key.
+	if err == nil {
+		t.Fatal("expected error for non-IP override key, got nil")
+	}
+	// Don't pin the exact wording, just verify the key is mentioned.
+	if !contains(err.Error(), "not-an-ip") {
+		t.Errorf("error should mention the offending key 'not-an-ip', got: %v", err)
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}

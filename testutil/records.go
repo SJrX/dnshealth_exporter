@@ -98,3 +98,18 @@ func A(name, ip string) dns.RR {
 		A: net.ParseIP(ip),
 	}
 }
+
+// AAAA creates a dns.AAAA record. Mirrors A() for IPv6 — same
+// signature shape, same defaults, accepts any textual IPv6 form
+// that net.ParseIP understands.
+func AAAA(name, ipv6 string) dns.RR {
+	return &dns.AAAA{
+		Hdr: dns.RR_Header{
+			Name:   dns.Fqdn(name),
+			Rrtype: dns.TypeAAAA,
+			Class:  dns.ClassINET,
+			Ttl:    300,
+		},
+		AAAA: net.ParseIP(ipv6),
+	}
+}

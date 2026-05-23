@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"log/slog"
+	"net"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -136,21 +137,62 @@ func (f *DNSFixture) Probe(fn prober.ProbeFn, zone string) *prometheus.Registry 
 		return prometheus.NewRegistry()
 	}
 
+	// Mirror cycle.runner's discovery flow: seed from parent glue,
+	// dedupe, then augment any hostname whose parent glue is missing
+	// an IP family by resolving out-of-band. Per spec 006 FR-002 /
+	// FR-010 / FR-011.
+	seen := make(map[string]struct{})
 	var nameservers []prober.Nameserver
 	for _, ns := range delegation.NSRecords {
-		if ns.IP != "" {
-			// Parent glue inline (potentially fanned out per IP by
-			// extractDelegation after T009b lands).
-			nameservers = append(nameservers, ns)
+		if ns.IP == "" {
 			continue
 		}
-		ips, err := prober.ResolveHostnames(ctx, ns.Hostname, client, logger)
+		key := ns.Hostname + ":" + ns.IP
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		nameservers = append(nameservers, ns)
+	}
+
+	// Identify hostnames needing augmentation: no glue at all, or
+	// only one IP family present.
+	families := make(map[string]struct{ v4, v6 bool })
+	needs := make(map[string]bool)
+	for _, ns := range delegation.NSRecords {
+		fam := families[ns.Hostname]
+		if ns.IP == "" {
+			needs[ns.Hostname] = true
+			families[ns.Hostname] = fam
+			continue
+		}
+		if parsed := net.ParseIP(ns.IP); parsed != nil && parsed.To4() == nil {
+			fam.v6 = true
+		} else {
+			fam.v4 = true
+		}
+		families[ns.Hostname] = fam
+		if _, already := needs[ns.Hostname]; !already {
+			needs[ns.Hostname] = false
+		}
+	}
+	for host := range needs {
+		fam := families[host]
+		if fam.v4 && fam.v6 {
+			continue
+		}
+		ips, err := prober.ResolveHostnames(ctx, host, client, logger)
 		if err != nil {
-			f.t.Logf("Resolve hostname error: %v", err)
+			f.t.Logf("Resolve hostname error for %s: %v", host, err)
 			continue
 		}
 		for _, ip := range ips {
-			nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+			key := host + ":" + ip
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			nameservers = append(nameservers, prober.Nameserver{Hostname: host, IP: ip})
 		}
 	}
 

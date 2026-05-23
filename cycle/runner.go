@@ -3,6 +3,7 @@ package cycle
 import (
 	"context"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -170,28 +171,31 @@ func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config)
 		r.Logger.Debug("delegation cache miss, stored", "zone", zone)
 	}
 
-	// Discover nameservers — resolve missing IPs (no-glue case) and
-	// fan out one Nameserver per resolved address (both A and AAAA
-	// families, any count) per spec 006 / contracts/nameserver-fanout.md.
-	var nameservers []prober.Nameserver
-	for _, ns := range delegation.NSRecords {
-		if ns.IP != "" {
-			// Parent supplied glue inline — use directly. After
-			// extractDelegation is extended for AAAA (T009b), this
-			// branch also handles the multi-IP-per-hostname case
-			// because delegation.NSRecords itself may carry
-			// multiple entries for one hostname.
-			nameservers = append(nameservers, ns)
-			continue
-		}
-		ips, err := prober.ResolveHostnames(ctx, ns.Hostname, client, r.Logger)
+	// Discover nameservers — start from the parent's glue, dedupe,
+	// then augment any hostname whose parent-supplied glue is missing
+	// an IP family by resolving the missing family out-of-band. This
+	// covers three real-world cases:
+	//   (a) NS with parent A+AAAA glue: use both, no extra lookup.
+	//   (b) NS with parent A glue only (common — many TLDs don't ship
+	//       AAAA glue): augment with AAAA via ResolveHostnames.
+	//   (c) NS with no parent glue at all (out-of-bailiwick): resolve
+	//       both families via ResolveHostnames.
+	// Per spec 006 FR-002 / FR-010 / FR-011 / contracts/nameserver-fanout.md.
+	nameservers, glueByHost := buildInitialNameservers(delegation.NSRecords)
+
+	for _, host := range hostsNeedingAugmentation(delegation.NSRecords, glueByHost) {
+		ips, err := prober.ResolveHostnames(ctx, host, client, r.Logger)
 		if err != nil {
 			r.Logger.Warn("could not resolve NS hostname",
-				"zone", zone, "ns", ns.Hostname, "err", err)
+				"zone", zone, "ns", host, "err", err)
 			continue
 		}
 		for _, ip := range ips {
-			nameservers = append(nameservers, prober.Nameserver{Hostname: ns.Hostname, IP: ip})
+			key := host + ":" + ip
+			if _, seen := glueByHost[key]; !seen {
+				glueByHost[key] = struct{}{}
+				nameservers = append(nameservers, prober.Nameserver{Hostname: host, IP: ip})
+			}
 		}
 	}
 
@@ -213,4 +217,81 @@ func (r *Runner) probeZone(ctx context.Context, zone string, cfg *config.Config)
 		allResults = append(allResults, results...)
 	}
 	return allResults
+}
+
+// buildInitialNameservers seeds the nameservers slice with every
+// parent-supplied glue entry, deduplicated by (hostname, IP). Returns
+// the slice and a seen-set the caller uses to dedupe the augmentation
+// pass below.
+func buildInitialNameservers(nsRecords []prober.Nameserver) ([]prober.Nameserver, map[string]struct{}) {
+	seen := make(map[string]struct{})
+	var nameservers []prober.Nameserver
+	for _, ns := range nsRecords {
+		if ns.IP == "" {
+			continue
+		}
+		key := ns.Hostname + ":" + ns.IP
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		nameservers = append(nameservers, ns)
+	}
+	return nameservers, seen
+}
+
+// hostsNeedingAugmentation returns the list of NS hostnames for which
+// an out-of-band ResolveHostnames call should be made. A hostname is
+// included if either:
+//
+//   - it has no parent-supplied glue at all (the original #14 case),
+//     OR
+//   - its parent-supplied glue covers only one IP family (the FR-011
+//     case — common when TLDs ship A glue but no AAAA glue).
+//
+// Hostnames whose parent glue already covers both families are
+// skipped — no extra DNS queries beyond what today's code would do.
+func hostsNeedingAugmentation(nsRecords []prober.Nameserver, seen map[string]struct{}) []string {
+	hosts := make(map[string]bool) // hostname → need-augment
+	families := make(map[string]struct{ v4, v6 bool })
+
+	for _, ns := range nsRecords {
+		f := families[ns.Hostname]
+		if ns.IP == "" {
+			// No glue at all → definitely needs augmentation.
+			hosts[ns.Hostname] = true
+			families[ns.Hostname] = f
+			continue
+		}
+		// Categorise the IP family.
+		if isIPv6(ns.IP) {
+			f.v6 = true
+		} else {
+			f.v4 = true
+		}
+		families[ns.Hostname] = f
+		// Mark for augmentation only if not yet definitely-covered.
+		if _, already := hosts[ns.Hostname]; !already {
+			hosts[ns.Hostname] = false
+		}
+	}
+
+	// Hostnames missing a family need augmentation. Hostnames with
+	// already-covered both families don't.
+	out := make([]string, 0, len(hosts))
+	for host := range hosts {
+		f := families[host]
+		if !f.v4 || !f.v6 {
+			out = append(out, host)
+		}
+	}
+	return out
+}
+
+// isIPv6 reports whether an IP string is in v6 form. Uses
+// net.ParseIP / To4 rather than string heuristics so unusual forms
+// (IPv4-mapped IPv6, etc.) are categorised correctly.
+func isIPv6(ip string) bool {
+	parsed := net.ParseIP(ip)
+	return parsed != nil && parsed.To4() == nil
 }

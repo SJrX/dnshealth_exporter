@@ -228,7 +228,7 @@ with multiple A records. Pre-fix only the first A surfaces.
 multi-A topologies; assert per-IP series counts match resolved
 IP counts.
 
-- [ ] T013 [P] [US2] Create `prober/glue_dualstack_test.go`
+- [X] T013 [P] [US2] Create `prober/glue_dualstack_test.go`
   (`//go:build integration`). Topology: referral server with
   `example.test` delegation pointing at `ns1.example.test` and
   `ns2.example.test` with **both A and AAAA glue** for each NS
@@ -239,7 +239,7 @@ IP counts.
   (once per IP family) and twice in `source="self"` after glue
   prober runs. Per US2 acceptance scenario 1.
 
-- [ ] T014 [P] [US2] Create `prober/glue_parent_v4_only_glue_test.go`
+- [X] T014 [P] [US2] Create `prober/glue_parent_v4_only_glue_test.go` (required also adding FR-011 augmentation to cycle/runner.go + testutil/fixture.go::Probe so the runner resolves a missing IP family out-of-band when parent glue only covers one family — the user's real-world sjrx.net case)
   (`//go:build integration`). Topology: referral server with
   `example.test` delegation pointing at `ns1.different.test` and
   `ns2.different.test` with **A glue only for them** at the parent
@@ -251,7 +251,7 @@ IP counts.
   series with BOTH v4 (parent glue) and v6 (out-of-band) entries.
   Per US2 acceptance scenario 3 + FR-011.
 
-- [ ] T015 [P] [US2] Create `prober/glue_multi_a_test.go` under
+- [X] T015 [P] [US2] Create `prober/glue_multi_a_test.go` under
   build tag `//go:build integration` with multi-A topology: one NS
   hostname (e.g., `ns1.example.test`) with two distinct A records
   in the parent's glue (e.g., `127.240.0.2` and `127.240.0.3`).

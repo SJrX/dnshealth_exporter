@@ -120,10 +120,15 @@ func selfNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 		OverrideByName("Responded", []dashboard.DynamicConfigValue{
 			{Id: "mappings", Value: respondedYesNoMappings()},
 			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
+			// Narrow: values are short ("yes"/"no") and the colour
+			// background makes the cell easy to scan. Wider than Result
+			// (80) because "Responded" is a slightly longer label.
+			{Id: "custom.width", Value: 100},
 		}).
 		OverrideByName("Recursion", []dashboard.DynamicConfigValue{
 			{Id: "mappings", Value: recursionYesNoMappings()},
 			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
+			{Id: "custom.width", Value: 100},
 		}).
 		SortBy(sortByAsc("Nameserver"))
 }
@@ -185,5 +190,21 @@ func soaSerialsTable(yOffset uint32) *table.PanelBuilder {
 				"job 1": true, "job 2": true, "job 3": true, "job 4": true, "job 5": true,
 			},
 		})).
+		// Narrow the SOA timer columns — values are small integers
+		// (typically 30 to 86400 seconds) and the labels fit
+		// comfortably in ~110px. Keeps Nameserver / IP / Serial wide
+		// since those carry longer / more variable content.
+		OverrideByName("Refresh (s)", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 110},
+		}).
+		OverrideByName("Retry (s)", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 100},
+		}).
+		OverrideByName("Expire (s)", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 110},
+		}).
+		OverrideByName("Min TTL (s)", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 110},
+		}).
 		SortBy(sortByAsc("Nameserver"))
 }

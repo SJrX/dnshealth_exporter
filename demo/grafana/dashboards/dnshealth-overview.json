@@ -34,6 +34,7 @@
         }
       ],
       "title": "Parent — status",
+      "description": "### Parent has NS records for the zone\n\n**Metric**: `dnshealth_ns_record{source=\"parent\"}`  \n**Why FAIL matters**: The zone may be unreachable — resolvers can't find the authoritative NSs without a delegation from the parent.  \n**Investigate**: NS records (from parent) panel below; check the TLD's view of the zone.\n\n### Parent delegation walk succeeded\n\n**Metric**: `dnshealth_parent_delegation`  \n**Why FAIL matters**: The delegation walk from root failed entirely — every downstream check has no data for this zone this cycle.  \n**Investigate**: Exporter logs (`delegation walk failed`); root-server reachability.\n",
       "transparent": false,
       "datasource": {
         "type": "prometheus",
@@ -173,6 +174,7 @@
         }
       ],
       "title": "NS — status",
+      "description": "### Multiple authoritative nameservers (\u003e=2)\n\n**Metric**: distinct (zone, nameserver) tuples in `dnshealth_query_success{check=\"soa\"}`  \n**Why FAIL matters**: A single NS is a single point of failure (RFC 2182). One outage = the whole zone goes dark.  \n**Investigate**: NS records panels below; add at least one more NS.\n\n### All NSs answered SOA authoritatively\n\n**Metric**: `min(dnshealth_query_success{check=\"soa\"})`  \n**Why FAIL matters**: At least one NS isn't responding correctly; further failures take the zone dark.  \n**Investigate**: NS records (from the zone) — `Responded` column highlights which NS failed.\n\n### No NS advertises recursion (RA=0)\n\n**Metric**: `max(dnshealth_ns_recursion_available) == 0`  \n**Why FAIL matters**: Open recursive resolvers can be abused for DNS amplification / reflection attacks.  \n**Investigate**: NS records (from the zone) — `Recursion` column highlights the offending NS.\n\n### Parent and self report same NS records\n\n**Metric**: count comparison of `dnshealth_ns_record{source=\"parent\"}` vs `source=\"self\"`  \n**Why FAIL matters**: The parent's view of the NS set diverges from what the zone itself advertises; resolvers may pick a stale or wrong set.  \n**Investigate**: NS records (from parent) and NS records (from the zone) tables side-by-side.\n\n### All NS hostnames syntactically valid (LDH)\n\n**Metric**: `min(dnshealth_ns_hostname_syntax_valid)`  \n**Why FAIL matters**: Hostnames violating RFC 952 / 1123 (underscores, leading/trailing hyphens) may be rejected by strict resolvers.  \n**Investigate**: NS records tables show each NS hostname — find the one with the invalid character.\n\n### No NS hostname is a CNAME (RFC 2181 §10.3)\n\n**Metric**: `max(dnshealth_ns_hostname_is_cname) == 0`  \n**Why FAIL matters**: NS records pointing at a CNAME violate RFC 2181 §10.3; resolver handling is inconsistent → intermittent resolution failures.  \n**Investigate**: NS records tables show each NS hostname; check its CNAME chain externally.\n",
       "transparent": false,
       "datasource": {
         "type": "prometheus",
@@ -291,6 +293,7 @@
         }
       ],
       "title": "SOA — status",
+      "description": "### All NSs report same SOA serial\n\n**Metric**: `max(dnshealth_soa_serial) - min(dnshealth_soa_serial) == 0`  \n**Why FAIL matters**: Secondaries haven't pulled the latest zone — resolvers may serve stale data depending on which NS they hit.  \n**Investigate**: SOA per-nameserver table below — find the NS reporting an out-of-date serial.\n\n### SOA MNAME is in zone's NS RR set\n\n**Metric**: `min(dnshealth_soa_mname_in_ns_set)`  \n**Why FAIL matters**: The MNAME identifies the primary master. If it's outside the NS set, NOTIFY may target the wrong server (hidden-master setups legitimately read 0 here — verify intent before alerting).  \n**Investigate**: SOA per-nameserver table — each row's `mname` label vs. the NS records tables.\n\n### SOA MNAME hostname resolves to A or AAAA\n\n**Metric**: `min(dnshealth_soa_mname_resolves)`  \n**Why FAIL matters**: NOTIFY and dynamic updates target the MNAME hostname; if it doesn't resolve, both mechanisms break silently.  \n**Investigate**: SOA per-nameserver table shows the `mname` label — try resolving that hostname externally.\n",
       "transparent": false,
       "datasource": {
         "type": "prometheus",

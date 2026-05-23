@@ -130,6 +130,27 @@ services:
           - ns2.v6-only.demo.
     restart: unless-stopped
 
+  # Authoritative for dup-glue.demo. The interesting bit is in the
+  # root zone's referral (demo/coredns/root/zones/demo.zone), which
+  # advertises the same A glue record for ns1.dup-glue.demo. TWICE.
+  # CoreDNS serves duplicate RRs from its zone file verbatim, so the
+  # exporter sees the duplicate on the wire — this is the trigger
+  # for issue #26 (pre-fix: per-server query counter inflated).
+  # Dedicated container at a unique IP so the counter assertion can
+  # be isolated from other zones' traffic.
+  coredns-dup-glue:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/dup-glue/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/dup-glue/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.17
+        aliases:
+          - ns1.dup-glue.demo.
+    restart: unless-stopped
+
   exporter:
     build:
       context: ..
@@ -150,6 +171,8 @@ services:
       - coredns-soa-serial-mismatch-b
       - coredns-lame-nameserver
       - coredns-ns-mismatch
+      - coredns-v6-only
+      - coredns-dup-glue
     restart: unless-stopped
 
   prometheus:

@@ -1,0 +1,24 @@
+; dup-glue.demo. — exists to surface issue #26 in the demo. The
+; zone itself is fully healthy; the bug lives in the PARENT'S
+; referral (see demo/coredns/root/zones/demo.zone), where the same
+; A glue record is listed TWICE for ns1.dup-glue.demo. — a legal
+; but rare RFC corner case that pre-fix would inflate the
+; per-server dnshealth_dns_queries_total counter for 172.31.0.17.
+; Post-fix the extractDelegation dedup keeps the counter honest.
+
+$ORIGIN dup-glue.demo.
+$TTL 30
+
+@   IN  SOA  ns1.dup-glue.demo. admin.dup-glue.demo. (
+            2026052301  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.dup-glue.demo.
+
+ns1   IN  A    172.31.0.17
+
+@     IN  A    172.31.0.17

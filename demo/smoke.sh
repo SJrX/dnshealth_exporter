@@ -146,6 +146,27 @@ grep -E '^dnshealth_ns_hostname_is_cname\{[^}]+\} 0$' "${METRICS_FILE}" \
     | grep -F 'zone="healthy.demo."' | grep -F 'nameserver="ns1.healthy.demo."' >/dev/null \
     || fail "dnshealth_ns_hostname_is_cname for healthy.demo. / ns1 is not 0"
 
+echo "A4f: dup-glue.demo. probes normally despite duplicated parent glue (issue #26)"
+# Parent referral for dup-glue.demo. lists the same A glue record
+# twice for ns1.dup-glue.demo. (deliberate, per
+# demo/coredns/root/zones/demo.zone). Pre-fix this inflated
+# dnshealth_dns_queries_total{server="172.31.0.17"} via duplicate
+# ProbeResults flowing out of extractDelegation; post-fix the
+# slices.Contains gate keeps the glueMap honest. Smoke asserts the
+# zone is being probed normally — exact counter-magnitude is the
+# integration test's job (cycle-timing makes a tight smoke
+# assertion racy), but a single parent NS-record series for the
+# (host, IP) tuple confirms the dedup is in effect.
+grep -E '^dnshealth_ns_record\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="dup-glue.demo."' \
+    | grep -F 'nameserver="ns1.dup-glue.demo."' \
+    | grep -F 'ip="172.31.0.17"' \
+    | grep -F 'source="parent"' >/dev/null \
+    || fail "dup-glue.demo. parent-side ns_record series missing"
+# Counter exists for the dup-glue IP (proves the zone was probed).
+grep -E '^dnshealth_dns_queries_total\{server="172\.31\.0\.17"\} [1-9]' "${METRICS_FILE}" >/dev/null \
+    || fail "dnshealth_dns_queries_total for 172.31.0.17 (dup-glue) is missing or zero"
+
 echo "A5: build info present"
 grep -F 'dnshealth_build_info' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_build_info not present"

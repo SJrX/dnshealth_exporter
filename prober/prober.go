@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/miekg/dns"
@@ -187,14 +188,28 @@ func extractDelegation(parentServer string, nsSection, extraSection []dns.RR, zo
 	result := &DelegationResult{ParentServer: parentServer}
 
 	// hostname → list of all (A + AAAA) addresses found in Additional.
+	// Deduplicated by (hostname, IP) — if a parent returns the same
+	// glue record twice for one hostname (legal per RFC but unusual),
+	// we still emit only one NSRecords / Glue entry. Without this,
+	// downstream per-server counters (dnshealth_dns_queries_total)
+	// over-report for the affected NS — see issue #26. The address
+	// strings are already canonical (.A.String() / .AAAA.String()
+	// produce RFC 5952 form), so plain string equality is correct.
 	glueMap := make(map[string][]string)
 	for _, rr := range extraSection {
+		var name, ip string
 		switch g := rr.(type) {
 		case *dns.A:
-			glueMap[g.Hdr.Name] = append(glueMap[g.Hdr.Name], g.A.String())
+			name, ip = g.Hdr.Name, g.A.String()
 		case *dns.AAAA:
-			glueMap[g.Hdr.Name] = append(glueMap[g.Hdr.Name], g.AAAA.String())
+			name, ip = g.Hdr.Name, g.AAAA.String()
+		default:
+			continue
 		}
+		if slices.Contains(glueMap[name], ip) {
+			continue
+		}
+		glueMap[name] = append(glueMap[name], ip)
 	}
 
 	for _, rr := range nsSection {

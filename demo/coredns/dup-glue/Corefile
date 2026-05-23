@@ -1,0 +1,14 @@
+# Authoritative for dup-glue.demo. The interesting bit isn't here
+# (the zone is otherwise vanilla) — it's in the parent's referral,
+# where demo/coredns/root/zones/demo.zone lists the same A glue
+# record TWICE for this zone's NS. CoreDNS's file plugin preserves
+# duplicate RRs at the wire level, which is what we want to surface
+# issue #26: a parent returning duplicate glue used to inflate the
+# per-server query counter via extractDelegation's un-deduped
+# glueMap append. See PR linked from #26.
+
+dup-glue.demo. {
+    file /zones/dup-glue.demo.zone
+    log
+    errors
+}

@@ -11,6 +11,7 @@ zones:
   - lame-nameserver.demo.
   - ns-mismatch.demo.
   - v6-only.demo.
+  - dup-glue.demo.
 
 # Tighter than the 60s production default so iteration sees changes
 # within ~20 seconds.

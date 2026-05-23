@@ -130,6 +130,12 @@ func selfNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
 			{Id: "custom.width", Value: 100},
 		}).
+		// Widen IP — needs to fit canonical IPv6 form (up to ~25 chars
+		// for typical addresses; the address-override pattern in spec
+		// 006 makes v6 entries common on this panel).
+		OverrideByName("IP", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 240},
+		}).
 		SortBy(sortByAsc("Nameserver"))
 }
 
@@ -190,6 +196,11 @@ func soaSerialsTable(yOffset uint32) *table.PanelBuilder {
 				"job 1": true, "job 2": true, "job 3": true, "job 4": true, "job 5": true,
 			},
 		})).
+		// Widen IP — needs to fit canonical IPv6 form (up to ~25 chars
+		// for typical addresses).
+		OverrideByName("IP", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 240},
+		}).
 		// Narrow the SOA timer columns — values are small integers
 		// (typically 30 to 86400 seconds) and the labels fit
 		// comfortably in ~110px. Keeps Nameserver / IP / Serial wide

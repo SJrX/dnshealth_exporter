@@ -1145,6 +1145,11 @@
               "job 3": true,
               "job 4": true,
               "job 5": true,
+              "nameserver 1": true,
+              "nameserver 2": true,
+              "nameserver 3": true,
+              "nameserver 4": true,
+              "nameserver 5": true,
               "zone 1": true,
               "zone 2": true,
               "zone 3": true,
@@ -1243,7 +1248,7 @@
                       "1": {
                         "color": "red",
                         "index": 1,
-                        "text": "RA=1"
+                        "text": "yes"
                       }
                     },
                     "type": "value"

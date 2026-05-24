@@ -91,6 +91,15 @@ func ProbeMX(ctx context.Context, zone string, nameservers []Nameserver, delegat
 		Success:    true,
 	})
 
+	// Per-target dedup: a zone may legally publish two MX RRs that
+	// share the same target at different priorities (e.g.,
+	// `10 mail` + `20 mail`). mx_info is per-RR (one series per
+	// {target, priority}); the per-target validity gauges (mx_resolves,
+	// mx_is_cname, mx_syntax_valid) are per-unique-target, dedup at
+	// emit time so each target produces ONE series. See
+	// contracts/mx-metrics.md `dnshealth_mx_resolves` cardinality note.
+	emittedValidity := make(map[string]bool)
+
 	for _, mxRR := range mxRRs {
 		target := canonName(mxRR.Mx)
 		priority := mxRR.Preference
@@ -102,10 +111,20 @@ func ProbeMX(ctx context.Context, zone string, nameservers []Nameserver, delegat
 		// but skip the per-target validity checks.
 		isNullSentinel := target == "."
 
-		result := ProbeResult{
+		// Info-result: one ProbeResult per MX RR, carrying ONLY
+		// mx_info with {target, priority} labels. Split from the
+		// validity-result below because mx_info is per-RR while
+		// the validity metrics are per-unique-target — keeping
+		// them on the same result would force `priority` onto
+		// every metric (contract violation; also creates duplicate
+		// per-target series for legal duplicate-target zones).
+		// Nameserver/IP intentionally empty: MX is per-zone data,
+		// not per-NS fan-out; the actual NS that answered is
+		// attributed via the top-level success result above.
+		infoResult := ProbeResult{
 			Zone:       zone,
 			Check:      "mx",
-			Nameserver: target,
+			Nameserver: "",
 			IP:         "",
 			Success:    true,
 			Labels: map[string]string{
@@ -124,6 +143,28 @@ func ProbeMX(ctx context.Context, zone string, nameservers []Nameserver, delegat
 			Metrics: map[string]float64{
 				"mx_info": 1,
 			},
+		}
+		results = append(results, infoResult)
+
+		// Validity-result: at most one per unique target, even if
+		// the same target appears in multiple MX RRs. No `priority`
+		// label — validity is a property of the target hostname,
+		// independent of which RR(s) reference it.
+		if emittedValidity[target] {
+			continue
+		}
+		emittedValidity[target] = true
+
+		validityResult := ProbeResult{
+			Zone:       zone,
+			Check:      "mx",
+			Nameserver: "",
+			IP:         "",
+			Success:    true,
+			Labels: map[string]string{
+				"target": target,
+			},
+			Metrics: map[string]float64{},
 		}
 
 		if !isNullSentinel {
@@ -144,7 +185,7 @@ func ProbeMX(ctx context.Context, zone string, nameservers []Nameserver, delegat
 						"zone", zone, "target", target, "err", rerr)
 				}
 			}
-			result.Metrics["mx_resolves"] = resolves
+			validityResult.Metrics["mx_resolves"] = resolves
 
 			// CNAME check (cached per target).
 			var isCNAME float64
@@ -162,7 +203,7 @@ func ProbeMX(ctx context.Context, zone string, nameservers []Nameserver, delegat
 						"zone", zone, "target", target)
 				}
 			}
-			result.Metrics["mx_is_cname"] = isCNAME
+			validityResult.Metrics["mx_is_cname"] = isCNAME
 
 			// Syntax check — pure local, no caching needed
 			// (reuses spec N6's isValidNSHostname).
@@ -170,15 +211,15 @@ func ProbeMX(ctx context.Context, zone string, nameservers []Nameserver, delegat
 			if isValidNSHostname(target) {
 				syntaxValid = 1
 			}
-			result.Metrics["mx_syntax_valid"] = syntaxValid
+			validityResult.Metrics["mx_syntax_valid"] = syntaxValid
 		} else {
 			// Null MX's "." sentinel — syntactically valid by
 			// RFC-defined construction, no resolution/CNAME
 			// checks apply.
-			result.Metrics["mx_syntax_valid"] = 1
+			validityResult.Metrics["mx_syntax_valid"] = 1
 		}
 
-		results = append(results, result)
+		results = append(results, validityResult)
 	}
 
 	return results, nil

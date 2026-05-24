@@ -345,9 +345,15 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 				if perr != nil {
 					continue
 				}
+				// Target comes from Labels["target"], not Nameserver
+				// — the prober emits MX results with Nameserver=""
+				// because MX is per-zone data, not per-NS fan-out
+				// (the prober change for spec 008 D-7 fixed the
+				// earlier mis-use of Nameserver to carry the target).
+				target := res.Labels["target"]
 				mxRRs = append(mxRRs, mxRR{
 					zone:     res.Zone,
-					target:   res.Nameserver,
+					target:   target,
 					priority: p,
 				})
 				// Track min priority per (zone, target) for the
@@ -355,8 +361,8 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 				if perTargetMinPriority[res.Zone] == nil {
 					perTargetMinPriority[res.Zone] = make(map[string]float64)
 				}
-				if existing, ok := perTargetMinPriority[res.Zone][res.Nameserver]; !ok || p < existing {
-					perTargetMinPriority[res.Zone][res.Nameserver] = p
+				if existing, ok := perTargetMinPriority[res.Zone][target]; !ok || p < existing {
+					perTargetMinPriority[res.Zone][target] = p
 				}
 			}
 			if v, ok := res.Metrics["mx_resolves"]; ok && v == 1 {

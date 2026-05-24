@@ -3,6 +3,8 @@
 package prober_test
 
 import (
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/sjr/dnshealth_exporter/prober"
@@ -255,6 +257,87 @@ func TestMX_NullMXConflict(t *testing.T) {
 	// env.Probe doesn't surface it. Runner-level coverage:
 	// TestCycleRunner_MXNullMXNotEmittedForConflict below verifies
 	// the runner correctly reads null_mx=0 in this conflict case.
+}
+
+// TestMX_LabelContract — emitted MX metrics must carry exactly the
+// labels documented in contracts/mx-metrics.md. Regression guard for
+// spec 008 D-7: the prober originally repurposed ProbeResult.Nameserver
+// to carry the MX target (producing a stray `nameserver=<target>`
+// label) and shared one Labels map across all per-RR metrics (forcing
+// `priority` onto mx_resolves / mx_is_cname / mx_syntax_valid, which
+// the contract says belong only to mx_info). Both errors caused
+// duplicate / unjoinable columns in the dashboard records table.
+func TestMX_LabelContract(t *testing.T) {
+	// Fixture Setup
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			MX("example.test", 10, "mail.example.test"),
+			A("mail.example.test", "127.240.0.3"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT
+	registry := env.Probe(prober.ProbeMX, "example.test")
+
+	// Verification — gather raw families and check exact label
+	// keysets per metric. AssertGauge uses subset matching, which
+	// would happily pass even with extra labels — this test uses
+	// the registry directly so it catches over-emission.
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("gathering metrics: %v", err)
+	}
+
+	wantLabels := map[string][]string{
+		// Per contracts/mx-metrics.md: mx_info has zone+target+priority
+		// plus the prober-plumbing labels (nameserver, ip — both empty
+		// for the MX prober since it's per-zone, not per-NS fan-out).
+		"dnshealth_mx_info":         {"ip", "nameserver", "priority", "target", "zone"},
+		"dnshealth_mx_resolves":     {"ip", "nameserver", "target", "zone"},
+		"dnshealth_mx_is_cname":     {"ip", "nameserver", "target", "zone"},
+		"dnshealth_mx_syntax_valid": {"ip", "nameserver", "target", "zone"},
+	}
+
+	for name, want := range wantLabels {
+		var found bool
+		for _, fam := range families {
+			if fam.GetName() != name {
+				continue
+			}
+			for _, m := range fam.GetMetric() {
+				found = true
+				got := []string{}
+				for _, lp := range m.GetLabel() {
+					got = append(got, lp.GetName())
+				}
+				sort.Strings(got)
+				if strings.Join(got, ",") != strings.Join(want, ",") {
+					t.Errorf("%s: got labels [%s], want [%s]",
+						name, strings.Join(got, ","), strings.Join(want, ","))
+				}
+				// Belt-and-braces: the over-emission bug specifically
+				// set nameserver=<target>; assert nameserver is empty.
+				for _, lp := range m.GetLabel() {
+					if lp.GetName() == "nameserver" && lp.GetValue() != "" {
+						t.Errorf("%s: nameserver label must be empty (MX is per-zone, not per-NS), got %q",
+							name, lp.GetValue())
+					}
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s: no series found in registry", name)
+		}
+	}
 }
 
 // TestMX_NSFailover — first parent-listed NS drops queries; ProbeMX

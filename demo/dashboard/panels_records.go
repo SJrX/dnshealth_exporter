@@ -278,6 +278,11 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 				"zone 1": true, "zone 2": true, "zone 3": true, "zone 4": true, "zone 5": true,
 				"check 1": true, "check 2": true, "check 3": true, "check 4": true, "check 5": true,
 				"ip 1": true, "ip 2": true, "ip 3": true, "ip 4": true, "ip 5": true,
+				// nameserver labels are emitted as empty strings by the
+				// MX prober (it's per-zone data, no NS fan-out). Excluded
+				// to keep the table tight; the columns would otherwise
+				// show up as 5 blank columns after the JoinByField.
+				"nameserver 1": true, "nameserver 2": true, "nameserver 3": true, "nameserver 4": true, "nameserver 5": true,
 				"__name__ 1": true, "__name__ 2": true, "__name__ 3": true, "__name__ 4": true, "__name__ 5": true,
 				"instance 1": true, "instance 2": true, "instance 3": true, "instance 4": true, "instance 5": true,
 				"job 1": true, "job 2": true, "job 3": true, "job 4": true, "job 5": true,
@@ -293,10 +298,9 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 			{Id: "custom.width", Value: 100},
 		}).
 		OverrideByName("Is CNAME", []dashboard.DynamicConfigValue{
-			// Inverted yes/no: 1 (yes = is a CNAME) is RED, 0 is GREEN.
-			// Reuse recursionYesNoMappings since it has the same
-			// inverted polarity (1=red, 0=green).
-			{Id: "mappings", Value: recursionYesNoMappings()},
+			// Inverted yes/no: 1 (yes = target is a CNAME, RFC 2181
+			// §10.3 violation) renders RED; 0 (not a CNAME) GREEN.
+			{Id: "mappings", Value: cnameYesNoMappings()},
 			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
 			{Id: "custom.width", Value: 100},
 		}).

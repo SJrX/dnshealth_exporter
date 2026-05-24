@@ -261,12 +261,12 @@ var mxStatusChecks = []statusCheck{
 	},
 }
 
-// mxStatusTable goes BELOW the existing records row, full-width
-// (24 grid units), positioned right before the per-MX records table.
-// Height 6 to comfortably fit 5 rows at CellHeight=Sm. The yOffset
-// shift the caller passes is applied via subY so the panel slides
-// up cleanly when the markdown info-panel header is absent (matches
-// the existing trio's behavior).
+// mxStatusTable is the left half (w=12) of the MX section row, paired
+// with mxRecordsTable on the right. Height 10 to match the records
+// table and to give each of the 5 status rows visual breathing room
+// at CellHeight=Sm. The pair sits inside a collapsible "MX" row at
+// Y=22 (header) + Y=23 (panels). yOffset shifts the section up
+// cleanly when the markdown info-panel header is absent.
 func mxStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("MX — status", gridPos(0, subY(22, yOffset), 24, 6), mxStatusChecks)
+	return statusTable("MX — status", gridPos(0, subY(23, yOffset), 12, 10), mxStatusChecks)
 }

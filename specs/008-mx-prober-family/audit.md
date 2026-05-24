@@ -186,6 +186,18 @@ The dashboard JoinByField across 5 queries by `target` then suffixed every per-q
 
 **Should I file an issue?**: No — primary bugs fixed in this same PR. The two residual smells above are noted here as future cleanups; will file as follow-ups if they bite anyone.
 
+### D-8: MX section condensed into a side-by-side collapsible row
+
+**Earlier layout** (D-3): MX status + MX records each at full width (24 grid units) stacked vertically, total 16 grid units of vertical space (rows 22-37). Operator row at Y=38.
+
+**New layout**: collapsible "MX — email health" row at Y=22 (1 grid row for the header) containing two half-width panels at Y=23 — status on the left (w=12, h=10), records on the right (w=12, h=10). Operator row moved to Y=33 to remove the dead space.
+
+**Why**: user spot-check noted the panels didn't need to be full-width and that the section was a natural candidate for a collapsible row. Side-by-side reads more compactly without sacrificing legibility (status table still has plenty of column width at half size; records table's Target column squeezes a bit for long FQDNs but the trade is acceptable). The collapsible row lets operators focused on parent/NS/SOA health hide the MX section to reclaim screen real estate. Default state is expanded since MX is user-visible health data (unlike the operator row, which is debug-focused and collapsed by default).
+
+**Verification**: dashboard JSON regenerated; drift test green; visual inspection in Grafana with all three demo MX zones confirms the layout reads cleanly. No behavior change — purely cosmetic.
+
+**Should I file an issue?**: No — applied directly in the same branch as a polish iteration after D-6/D-7.
+
 ### E-1: Plan deviation #1's analysis-bug-caught-early
 
 The /speckit-analyze C1 finding (row B's PromQL FAILing for Null-MX zones) was caught and remediated at the analyze step, before implementation. The fix is in T010's `mxStatusChecks` row B PromQL: includes the `OR on(zone) (dnshealth_mx_null_mx == bool 1)` suppression branch. Without that catch, Null-MX zones would have spuriously alerted operators across every dashboard view of the new feature — a real save by the analyze gate.

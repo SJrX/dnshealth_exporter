@@ -220,20 +220,21 @@ func soaSerialsTable(yOffset uint32) *table.PanelBuilder {
 		SortBy(sortByAsc("Nameserver"))
 }
 
-// mxRecordsTable lists per-MX details for the selected zone: target,
-// priority, resolves yes/no, is-CNAME yes/no, syntax-valid yes/no,
-// role (primary/backup). Joined by `target` field across 5 queries.
-// Goes BELOW the MX status panel (y=22) at y=28, full-width × 10.
+// mxRecordsTable is the right half (w=12) of the MX section row,
+// paired with mxStatusTable on the left at the same Y. Lists per-MX
+// details: target, priority, resolves yes/no, is-CNAME yes/no,
+// syntax-valid yes/no, role (primary/backup). Joined by `target`
+// field across 5 queries.
 //
 // Note on Null MX zones: the `.` target appears with priority=0
 // and `resolves`/`is_cname` cells empty (those metrics aren't
 // emitted for the sentinel `.` target per spec 008 R-6 / data-model
-// edge-case table). Detail text on the panel below explains.
+// edge-case table). Detail text on the panel explains.
 func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("MX records — per zone").
 		Description(`Per-MX details for the selected zone: target hostname, priority, resolution status, CNAME status, syntax validity, role (primary = lowest-priority MX; ties at minimum priority all read "primary"). Empty cells in resolves/is-CNAME columns indicate Null MX's "." sentinel target — those checks intentionally don't apply per RFC 7505. SMTP-level reachability is out of scope; use blackbox_exporter with an SMTP prober for that.`).
-		GridPos(gridPos(0, subY(28, yOffset), 24, 10)).
+		GridPos(gridPos(12, subY(23, yOffset), 12, 10)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).

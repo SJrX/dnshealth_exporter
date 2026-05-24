@@ -160,6 +160,13 @@ description: "Tasks for spec 008 — MX prober family"
 - [X] T033 Run `cd demo && docker compose down -v && ./smoke.sh` end-to-end twice back-to-back (cold cache + warm) to verify the new A4g/A4h/A4i assertions are stable and #40's readiness loop still works with the added zones.
 - [X] T034 Per Constitution Governance section, perform an adversarial code-vs-spec audit before declaring complete: re-read each FR-### in `spec.md` and confirm the implementation actually delivers it. Verify in particular: the Null-MX-conflict case (T025 spec scenario) is correctly distinguished from canonical Null MX; the `mx_is_primary` gauge correctly handles tied-primary cases; the dashboard row E's PromQL predicate matches the contract. File any gaps as separate issues. Save audit notes to `specs/008-mx-prober-family/audit.md`.
 
+### Spot-check follow-ups (post-audit)
+
+User-driven dashboard spot-check after T034 surfaced two bugs that audit.md D-6 and D-7 cover in full. Tasks here mirror the work so the per-task ledger stays honest.
+
+- [X] T035 Fix Is-CNAME column rendering "RA=1" (audit D-6). Add `cnameYesNoMappings()` to `demo/dashboard/helpers.go` with neutral `"yes"`/`"no"` text + inverse polarity (1=red, 0=green). Switch the Is-CNAME column in `mxRecordsTable` (`demo/dashboard/panels_records.go`) from `recursionYesNoMappings` to the new helper.
+- [X] T036 Fix MX prober over-emitting labels (audit D-7). In `prober/mx.go`, split each MX RR into two `ProbeResult`s: an info-result carrying `mx_info` with `{target, priority}`, and a validity-result carrying `mx_resolves`/`mx_is_cname`/`mx_syntax_valid` with `{target}` only; both with `Nameserver=""` and `IP=""`. Per-target dedup via `emittedValidity` so duplicate-target zones produce one validity-result per unique target. Update `cycle/runner.go` MX aggregation to read target from `res.Labels["target"]` (one-line change). Add `nameserver N` to `panels_records.go` exclude list. Add `TestMX_LabelContract` to `prober/mx_test.go` asserting exact label keysets per metric.
+
 ---
 
 ## Dependencies

@@ -58,7 +58,10 @@ func respondedYesNoMappings() []any {
 
 // recursionYesNoMappings: 0/1 → no/RA=1 (green/red — green when RA is
 // off, red when RA=1) for the "Recursion" column of the NS records
-// (from the zone) table.
+// (from the zone) table. The "RA=1" text is deliberately NS-table
+// jargon (Recursion Available flag); reusing this helper on other
+// columns leaks that text inappropriately — use cnameYesNoMappings
+// or a sibling helper for non-NS contexts.
 func recursionYesNoMappings() []any {
 	return []any{
 		map[string]any{
@@ -66,6 +69,23 @@ func recursionYesNoMappings() []any {
 			"options": map[string]any{
 				"0": map[string]any{"text": "no", "color": "green", "index": 0},
 				"1": map[string]any{"text": "RA=1", "color": "red", "index": 1},
+			},
+		},
+	}
+}
+
+// cnameYesNoMappings: 0/1 → no/yes (green/red — green when target is
+// not a CNAME, red when it is) for the "Is CNAME" column of the per-MX
+// records table. Same inverted polarity as recursionYesNoMappings but
+// with neutral "yes"/"no" text — RFC 2181 §10.3 makes a CNAMEd MX
+// target a config error, hence red on the truthy side.
+func cnameYesNoMappings() []any {
+	return []any{
+		map[string]any{
+			"type": "value",
+			"options": map[string]any{
+				"0": map[string]any{"text": "no", "color": "green", "index": 0},
+				"1": map[string]any{"text": "yes", "color": "red", "index": 1},
 			},
 		},
 	}

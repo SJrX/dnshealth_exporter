@@ -147,6 +147,45 @@ A post-implementation code-review pass (run via an independent agent on the unco
 - The reviewer noted `mx_is_primary=1` for Null MX's `.` sentinel (priority 0 is trivially min). Defensible per the contract; visible in the per-MX table as "primary" for the `.` row. Operators will understand. No change.
 - `mx-broken.demo.zone` apex A is just filler; cosmetic. Left as-is for consistency with other demo zones.
 
+### D-6: Is-CNAME column rendered "RA=1" (NS-table jargon leak)
+
+**Symptom**: User spot-checked the demo dashboard after the rest of the spec landed and asked why the "Is CNAME" column in the per-MX records table showed `"RA=1"` (in red) for the CNAMEd target on `mx-broken.demo.` instead of something like `"yes"`.
+
+**Root cause**: `panels_records.go` reused `recursionYesNoMappings()` from `helpers.go` for the Is-CNAME column because it has the right inverted polarity (1=red, 0=green). But that helper's text values are NS-table jargon (`"no"`/`"RA=1"`) — "RA=1" is short for "Recursion Available = 1", meaningless on an MX-table column. A code comment justifying the polarity-match reuse pointed away from the text-leak issue.
+
+**Fix**: added a sibling helper `cnameYesNoMappings()` in `helpers.go` — same inverted polarity, neutral `"yes"`/`"no"` text — and switched the Is-CNAME column override to use it. Also added a comment to `recursionYesNoMappings` warning that the text is NS-specific.
+
+**Should I file an issue?**: No — fixed in this same PR. Documented here because the failure mode (helper reuse that copies polarity correctly but leaks domain-specific text) is a recurring shape in dashboard code; future helper authors should pick text-and-polarity from the *consuming* column's domain, not from whatever existing helper happens to share the color scheme.
+
+### D-7: MX prober over-emitted labels — dashboard records table showed phantom "nameserver 1..5 / priority 1..5" columns
+
+**Symptom**: User spot-checked the per-MX records table on `mx-broken.demo.` and saw the table render a series of extra columns labeled `nameserver 1`, `priority 1`, `nameserver 2`, `priority 2`, ... — one pair per query in the 5-query join — instead of the intended Target / Priority / Resolves / Is CNAME / Syntax valid / Role.
+
+**Root cause** (two compounding bugs in the prober, not the dashboard):
+
+1. **`Nameserver` field repurposed for MX target.** `ProbeMX` set `Nameserver: target` on every per-RR `ProbeResult`. `BuildRegistry` (`prober/registry.go`) always adds `nameserver` as a constant label to every metric emitted from a result. Effect: `mx_info{nameserver=mail-a.example.test., target=mail-a.example.test., ...}` — a redundant `nameserver` label equal to `target` on every MX metric, in conflict with `contracts/mx-metrics.md` which lists `{zone, target, priority}` (plus `ip=""`) only.
+
+2. **Shared `Labels` map across all metrics on one result.** Each per-RR `ProbeResult` carried `Labels: {target, priority}` and `Metrics: {mx_info, mx_resolves, mx_is_cname, mx_syntax_valid}`. Because BuildRegistry's `baseLabels` includes ALL the result's labels for ALL the result's metrics, `mx_resolves` / `mx_is_cname` / `mx_syntax_valid` got the `priority` label too — even though the contract says those metrics are per-target, no priority. Legal duplicate-target zones (e.g., `10 mail` + `20 mail` — same target, different priorities) further inflated this to two redundant series per target.
+
+The dashboard JoinByField across 5 queries by `target` then suffixed every per-query label with the query position (1..5), surfacing the leaked `nameserver` and `priority` columns visibly.
+
+**Fix** (at the contract-honest layer, not the dashboard):
+
+- `prober/mx.go` — for each MX RR, emit TWO results instead of one: an info-result carrying `mx_info` with `{target, priority}` labels, and a validity-result carrying `mx_resolves` / `mx_is_cname` / `mx_syntax_valid` with `{target}` only. Both have `Nameserver=""` and `IP=""`. Per-target dedup at emit time via an `emittedValidity` map so duplicate-target zones produce one validity-result per unique target (matching the contract's "Deduped at emit time" line).
+- `cycle/runner.go` — MX aggregation reads `target` from `res.Labels["target"]` instead of `res.Nameserver`. One-line change.
+- `demo/dashboard/panels_records.go` — added `nameserver 1..5` to the Organize exclude list (defensive; the labels are now empty strings post-fix, but explicit exclusion keeps the table tight if `BuildRegistry` ever stops short-circuiting empty-string labels).
+- `prober/mx_test.go` — new `TestMX_LabelContract` walks the gathered registry and asserts exact label keysets per metric (zone+target+priority+ip+nameserver for `mx_info`; zone+target+ip+nameserver for the validity metrics). Also asserts `nameserver` is empty. Subset-matching `AssertGauge` would have happily passed the buggy code; this test specifically catches over-emission.
+
+**Verification**: All MX prober + runner integration tests pass; `make dashboards` regenerated both JSON files without further drift; smoke passes A4g/A4h/A4i.
+
+**Residual smell, deliberately not fixed in this PR** (deferred to follow-up):
+
+- `BuildRegistry` emits `dnshealth_query_success{check="mx"}` for every `ProbeResult`, including the per-RR results introduced by this fix. Because per-RR results have `Nameserver=""` and `IP=""`, they all register the same `{zone, nameserver="", ip="", check="mx"}` series — silently dedup'd by the `registry.Register` collision check (first-wins). Net effect: 2 `query_success` series per zone per cycle (one from the top-level success result with `ip=queriedIP`, one from the per-RR collision-winner with `ip=""`). The pre-fix code had N+1 such series (one per RR with `nameserver=<target>`) — this fix reduces but doesn't eliminate the duplication. A clean fix needs either an `OmitQuerySuccess` field on `ProbeResult` or a BuildRegistry heuristic; both are bigger than this spec's scope. Filed mentally; not user-visible.
+
+- `dnshealth_mx_count` is per-RR while `dnshealth_mx_resolved_count` / `_cname_count` / `_syntax_valid_count` are now per-unique-target (post-fix). For the common case (no duplicate targets) `count == target_count` and the dashboard row B/C/D `_count == count` predicates work fine. For duplicate-target zones the predicates would spuriously FAIL (count=2 but resolved_count=1). Rare enough to defer; the principled fix is either changing `mx_count` to count unique targets (loses "total RRs" semantic) or adding a separate `mx_target_count` gauge. Out of scope here.
+
+**Should I file an issue?**: No — primary bugs fixed in this same PR. The two residual smells above are noted here as future cleanups; will file as follow-ups if they bite anyone.
+
 ### E-1: Plan deviation #1's analysis-bug-caught-early
 
 The /speckit-analyze C1 finding (row B's PromQL FAILing for Null-MX zones) was caught and remediated at the analyze step, before implementation. The fix is in T010's `mxStatusChecks` row B PromQL: includes the `OR on(zone) (dnshealth_mx_null_mx == bool 1)` suppression branch. Without that catch, Null-MX zones would have spuriously alerted operators across every dashboard view of the new feature — a real save by the analyze gate.

@@ -13,7 +13,7 @@ External interface contract for the new metrics exposed by the `mx` prober. Cons
 |---|---|---|
 | `zone` | configured zones | Canonical FQDN. |
 | `target` | per MX RR | Canonical FQDN, lowercase. For Null MX records, this is `"."` (root label). |
-| `priority` | per MX RR | Decimal string of the uint16 priority field (e.g., `"10"`, `"20"`, `"0"`). |
+| `priority` | per MX RR | Zero-padded 5-digit decimal string of the uint16 priority field (e.g., `"00010"`, `"00020"`, `"00000"`, `"65535"`). Padding makes string sort numerically correct in Grafana table panels — unpadded `"5"`, `"10"`, `"100"` would sort as `"10"`, `"100"`, `"5"`. Operator PromQL filters MUST use the padded form: `{priority="00010"}`. |
 | `check`, `ip`, etc. | ProbeResult plumbing | Standard prober-pipeline labels — `check="mx"`, `ip=""` (MX prober doesn't have a per-NS-IP fan-out shape). |
 
 **Cardinality bound**: At most `|zones| × (MX records per zone)` series per cycle. Typical zones: 1-4 MX records, so a deployment monitoring 100 zones expects ~200-400 series. Bounded.

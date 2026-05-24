@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -51,6 +52,38 @@ type Runner struct {
 	// registry entry). Per-cycle registry semantics already give the
 	// reset-on-no-stealth behavior the contract requires.
 	NSClassificationCount *prometheus.GaugeVec
+
+	// Per-zone MX aggregation gauges (spec 008). Reset()s each cycle;
+	// the aggregation pass in Run() Sets explicit values (including
+	// Set(0)) for every configured zone every cycle, so PromQL can
+	// distinguish "no MX records" (count=0) from "no data this cycle"
+	// (series absent). Mirrors the NSClassificationCount pattern.
+	//
+	// Note: dnshealth_mx_info, _resolves, _is_cname, _syntax_valid
+	// are emitted via the ProbeMX prober's ProbeResult pipeline (per-
+	// cycle registry), NOT via runner-owned gauges. Per-cycle registry
+	// semantics already give the reset-on-removal behavior the
+	// contract needs. See spec 008 R-3 and the cycle.Runner notes in
+	// the dnshealth_ns_stealth_reachable comment above for precedent.
+	MXCount             *prometheus.GaugeVec
+	MXResolvedCount     *prometheus.GaugeVec
+	MXCNAMECount        *prometheus.GaugeVec
+	MXSyntaxValidCount  *prometheus.GaugeVec
+
+	// NullMX = 1 iff the canonical RFC 7505 Null MX form is met
+	// (exactly one MX RR with preference 0 and target "."). Used by
+	// the MX-presence row to grant PASS on intentional-no-email zones.
+	NullMX *prometheus.GaugeVec
+
+	// MXHasNullMXRR = 1 iff ANY MX RR for the zone has preference 0
+	// and target ".", regardless of how many MX RRs exist total.
+	// Distinguishes the canonical Null MX case (NullMX=1, count=1)
+	// from the conflict case (MXHasNullMXRR=1, count>1) which row E
+	// catches. Without this, NullMX alone is `NullMX==1 ⟹ count==1`
+	// — making the obvious conflict predicate a tautology.
+	MXHasNullMXRR *prometheus.GaugeVec
+
+	MXIsPrimary *prometheus.GaugeVec
 }
 
 // NewRunner creates a Runner and registers operational metrics on
@@ -92,7 +125,35 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		Name: "dnshealth_ns_classification_count",
 		Help: "Count of NS hostnames in each classification (parent-only / self-only / both) for this zone this cycle. Reset each cycle; explicit Set(0) per (zone, classification) when count is zero so PromQL can distinguish 'no divergence' from 'no data'.",
 	}, []string{"zone", "classification"})
-	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts, cacheHits, cacheMisses, parentDelegation, nsClassificationCount)
+	mxCount := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_mx_count",
+		Help: "Total MX records for this zone this cycle (includes Null MX if present). Reset each cycle; explicit Set(0) when zone has no MX records.",
+	}, []string{"zone"})
+	mxResolvedCount := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_mx_resolved_count",
+		Help: "Count of MX targets that resolve (A or AAAA returned at least one record) for this zone this cycle. Reset each cycle; explicit Set(0).",
+	}, []string{"zone"})
+	mxCNAMECount := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_mx_cname_count",
+		Help: "Count of MX targets that are CNAMEs (RFC 2181 §10.3 violation) for this zone this cycle. Reset each cycle; explicit Set(0).",
+	}, []string{"zone"})
+	mxSyntaxValidCount := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_mx_syntax_valid_count",
+		Help: "Count of MX targets with LDH-valid hostnames for this zone this cycle. Compare with dnshealth_mx_count to detect any invalid target. Reset each cycle; explicit Set(0).",
+	}, []string{"zone"})
+	nullMX := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_mx_null_mx",
+		Help: "1 if this zone publishes exactly one MX RR with preference 0 and exchange '.' (canonical RFC 7505 Null MX form), 0 otherwise. Reset each cycle.",
+	}, []string{"zone"})
+	mxHasNullMXRR := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_mx_has_null_mx_rr",
+		Help: "1 if any MX RR for this zone has preference 0 and exchange '.', regardless of total MX count. Distinguishes canonical Null MX (count==1 AND has_null_mx_rr==1) from the conflict case (count>1 AND has_null_mx_rr==1) which RFC 7505 §3 forbids. Reset each cycle.",
+	}, []string{"zone"})
+	mxIsPrimary := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "dnshealth_mx_is_primary",
+		Help: "1 if this MX target's priority equals the minimum priority across all MX records for the zone; 0 if a lower-priority MX exists. Multi-MX-tied-at-minimum cases all read 1. Reset each cycle.",
+	}, []string{"zone", "target"})
+	reg.MustRegister(cycleDuration, zonesProbed, dnsQueries, dnsDuration, dnsTimeouts, cacheHits, cacheMisses, parentDelegation, nsClassificationCount, mxCount, mxResolvedCount, mxCNAMECount, mxSyntaxValidCount, nullMX, mxHasNullMXRR, mxIsPrimary)
 
 	return &Runner{
 		Cache:                 c,
@@ -106,6 +167,13 @@ func NewRunner(c *cache.DelegationCache, logger *slog.Logger, reg prometheus.Reg
 		DelegationCacheMisses: cacheMisses,
 		ParentDelegation:      parentDelegation,
 		NSClassificationCount: nsClassificationCount,
+		MXCount:               mxCount,
+		MXResolvedCount:       mxResolvedCount,
+		MXCNAMECount:          mxCNAMECount,
+		MXSyntaxValidCount:    mxSyntaxValidCount,
+		NullMX:                nullMX,
+		MXHasNullMXRR:         mxHasNullMXRR,
+		MXIsPrimary:           mxIsPrimary,
 	}
 }
 
@@ -130,6 +198,27 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 	}
 	if r.NSClassificationCount != nil {
 		r.NSClassificationCount.Reset()
+	}
+	if r.MXCount != nil {
+		r.MXCount.Reset()
+	}
+	if r.MXResolvedCount != nil {
+		r.MXResolvedCount.Reset()
+	}
+	if r.MXCNAMECount != nil {
+		r.MXCNAMECount.Reset()
+	}
+	if r.MXSyntaxValidCount != nil {
+		r.MXSyntaxValidCount.Reset()
+	}
+	if r.NullMX != nil {
+		r.NullMX.Reset()
+	}
+	if r.MXHasNullMXRR != nil {
+		r.MXHasNullMXRR.Reset()
+	}
+	if r.MXIsPrimary != nil {
+		r.MXIsPrimary.Reset()
 	}
 
 	var (
@@ -206,6 +295,130 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *CycleResult {
 				continue
 			}
 			r.NSClassificationCount.WithLabelValues(res.Zone, classification).Inc()
+		}
+	}
+
+	// MX aggregation — per-zone counts + Null-MX detection + per-MX
+	// is-primary derivation. Initialize per-zone gauges to 0 for every
+	// configured zone so PromQL can distinguish "no MX records" from
+	// "no data this cycle" (spec 008 FR-007 / R-2). Then walk
+	// allResults, collecting per-target metadata before deriving
+	// downstream values.
+	if r.MXCount != nil {
+		for _, zone := range cfg.Zones {
+			r.MXCount.WithLabelValues(zone).Set(0)
+			r.MXResolvedCount.WithLabelValues(zone).Set(0)
+			r.MXCNAMECount.WithLabelValues(zone).Set(0)
+			r.MXSyntaxValidCount.WithLabelValues(zone).Set(0)
+			r.NullMX.WithLabelValues(zone).Set(0)
+			r.MXHasNullMXRR.WithLabelValues(zone).Set(0)
+		}
+
+		// Collect per-zone metadata in two shapes:
+		//   - mxRRs: every MX RR seen (in arrival order). Drives
+		//     count gauges + Null-MX detection.
+		//   - perTargetMinPriority: zone → target → min(priority) seen.
+		//     Drives is_primary derivation. Consolidating by target
+		//     here prevents the duplicate-target last-write-wins bug
+		//     that two MX RRs sharing an exchange could otherwise
+		//     cause (legal config: `10 mail` + `20 mail` — same target,
+		//     two different priorities).
+		type mxRR struct {
+			zone     string
+			target   string
+			priority float64
+		}
+		var mxRRs []mxRR
+		perTargetMinPriority := make(map[string]map[string]float64)
+
+		for _, res := range allResults {
+			if res.Check != "mx" {
+				continue
+			}
+			if _, ok := res.Metrics["mx_info"]; ok {
+				r.MXCount.WithLabelValues(res.Zone).Inc()
+				priorityStr, hasP := res.Labels["priority"]
+				if !hasP {
+					continue
+				}
+				p, perr := strconv.ParseFloat(priorityStr, 64)
+				if perr != nil {
+					continue
+				}
+				mxRRs = append(mxRRs, mxRR{
+					zone:     res.Zone,
+					target:   res.Nameserver,
+					priority: p,
+				})
+				// Track min priority per (zone, target) for the
+				// is_primary derivation.
+				if perTargetMinPriority[res.Zone] == nil {
+					perTargetMinPriority[res.Zone] = make(map[string]float64)
+				}
+				if existing, ok := perTargetMinPriority[res.Zone][res.Nameserver]; !ok || p < existing {
+					perTargetMinPriority[res.Zone][res.Nameserver] = p
+				}
+			}
+			if v, ok := res.Metrics["mx_resolves"]; ok && v == 1 {
+				r.MXResolvedCount.WithLabelValues(res.Zone).Inc()
+			}
+			if v, ok := res.Metrics["mx_is_cname"]; ok && v == 1 {
+				r.MXCNAMECount.WithLabelValues(res.Zone).Inc()
+			}
+			if v, ok := res.Metrics["mx_syntax_valid"]; ok && v == 1 {
+				r.MXSyntaxValidCount.WithLabelValues(res.Zone).Inc()
+			}
+		}
+
+		// Null-MX detection: two related signals.
+		//   NullMX (canonical RFC 7505 §3 form): exactly one MX RR
+		//     for the zone AND that RR is `0 .`. Used by the MX-
+		//     presence row to grant PASS on intentional-no-email zones.
+		//   MXHasNullMXRR (broader): ANY MX RR for the zone is `0 .`,
+		//     regardless of total count. Catches the conflict case
+		//     (Null MX RR alongside real MX RRs) that RFC 7505 §3
+		//     forbids — exposed via row E.
+		zoneRRCount := make(map[string]int)
+		hasNullMXRR := make(map[string]bool)
+		for _, rr := range mxRRs {
+			zoneRRCount[rr.zone]++
+			if rr.priority == 0 && rr.target == "." {
+				hasNullMXRR[rr.zone] = true
+			}
+		}
+		for zone := range hasNullMXRR {
+			r.MXHasNullMXRR.WithLabelValues(zone).Set(1)
+			if zoneRRCount[zone] == 1 {
+				r.NullMX.WithLabelValues(zone).Set(1)
+			}
+		}
+
+		// is_primary: for each (zone, target), Set 1 if that
+		// target's MIN priority equals the zone's MIN across all
+		// targets; 0 otherwise. Consolidating by target first means
+		// duplicate-target MX RRs collapse to one is_primary signal
+		// per (zone, target) — no last-write-wins ambiguity.
+		if r.MXIsPrimary != nil {
+			for zone, targetMinP := range perTargetMinPriority {
+				if len(targetMinP) == 0 {
+					continue
+				}
+				var zoneMin float64
+				first := true
+				for _, p := range targetMinP {
+					if first || p < zoneMin {
+						zoneMin = p
+						first = false
+					}
+				}
+				for target, p := range targetMinP {
+					var v float64
+					if p == zoneMin {
+						v = 1
+					}
+					r.MXIsPrimary.WithLabelValues(zone, target).Set(v)
+				}
+			}
 		}
 	}
 

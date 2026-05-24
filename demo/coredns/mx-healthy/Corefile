@@ -1,0 +1,10 @@
+# Authoritative for mx-healthy.demo. — a fully healthy email
+# setup demonstrating the MX prober's happy path (spec 008 US1).
+# Two MX records at priorities 10 + 20; both targets resolve; no
+# CNAMEs; LDH-valid hostnames. Dashboard rows all PASS.
+
+mx-healthy.demo. {
+    file /zones/mx-healthy.demo.zone
+    log
+    errors
+}

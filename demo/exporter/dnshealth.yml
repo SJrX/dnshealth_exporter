@@ -14,6 +14,9 @@ zones:
   - dup-glue.demo.
   - ns-names-mismatch.demo.
   - hidden-master.demo.
+  - mx-healthy.demo.
+  - mx-broken.demo.
+  - mx-null.demo.
 
 # Tighter than the 60s production default so iteration sees changes
 # within ~20 seconds.

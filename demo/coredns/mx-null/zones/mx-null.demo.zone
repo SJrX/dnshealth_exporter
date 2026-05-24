@@ -1,0 +1,23 @@
+; mx-null.demo. — RFC 7505 Null MX demo (spec 008 US2). The single
+; MX RR with preference 0 and target "." declares: "this domain
+; does not accept email." The exporter detects this canonical form
+; and the dashboard's MX-presence row stays PASS for this zone.
+
+$ORIGIN mx-null.demo.
+$TTL 30
+
+@   IN  SOA  ns1.mx-null.demo. admin.mx-null.demo. (
+            2026052301  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.mx-null.demo.
+
+; Null MX per RFC 7505: priority 0, target ".".
+@     IN  MX   0 .
+
+ns1   IN  A    172.31.0.23
+@     IN  A    172.31.0.23

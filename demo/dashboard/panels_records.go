@@ -219,3 +219,96 @@ func soaSerialsTable(yOffset uint32) *table.PanelBuilder {
 		}).
 		SortBy(sortByAsc("Nameserver"))
 }
+
+// mxRecordsTable lists per-MX details for the selected zone: target,
+// priority, resolves yes/no, is-CNAME yes/no, syntax-valid yes/no,
+// role (primary/backup). Joined by `target` field across 5 queries.
+// Goes BELOW the MX status panel (y=22) at y=28, full-width × 10.
+//
+// Note on Null MX zones: the `.` target appears with priority=0
+// and `resolves`/`is_cname` cells empty (those metrics aren't
+// emitted for the sentinel `.` target per spec 008 R-6 / data-model
+// edge-case table). Detail text on the panel below explains.
+func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
+	return table.NewPanelBuilder().
+		Title("MX records — per zone").
+		Description(`Per-MX details for the selected zone: target hostname, priority, resolution status, CNAME status, syntax validity, role (primary = lowest-priority MX; ties at minimum priority all read "primary"). Empty cells in resolves/is-CNAME columns indicate Null MX's "." sentinel target — those checks intentionally don't apply per RFC 7505. SMTP-level reachability is out of scope; use blackbox_exporter with an SMTP prober for that.`).
+		GridPos(gridPos(0, subY(28, yOffset), 24, 10)).
+		Datasource(prometheusDS).
+		ShowHeader(true).
+		CellHeight(common.TableCellHeightSm).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("A").
+			Expr(`dnshealth_mx_info{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("B").
+			Expr(`dnshealth_mx_resolves{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("C").
+			Expr(`dnshealth_mx_is_cname{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("D").
+			Expr(`dnshealth_mx_syntax_valid{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("E").
+			Expr(`dnshealth_mx_is_primary{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTransformation(JoinByField(JoinByFieldOptions{
+			ByField: "target",
+			Mode:    "outer",
+		})).
+		WithTransformation(Organize(OrganizeOptions{
+			RenameByName: map[string]string{
+				"target":     "Target",
+				"priority":   "Priority",
+				"Value #B":   "Resolves",
+				"Value #C":   "Is CNAME",
+				"Value #D":   "Syntax valid",
+				"Value #E":   "Role",
+			},
+			IndexByName: map[string]int{
+				"target":     0,
+				"priority":   1,
+				"Value #B":   2,
+				"Value #C":   3,
+				"Value #D":   4,
+				"Value #E":   5,
+			},
+			ExcludeByName: map[string]bool{
+				"Time 1": true, "Time 2": true, "Time 3": true, "Time 4": true, "Time 5": true,
+				"zone 1": true, "zone 2": true, "zone 3": true, "zone 4": true, "zone 5": true,
+				"check 1": true, "check 2": true, "check 3": true, "check 4": true, "check 5": true,
+				"ip 1": true, "ip 2": true, "ip 3": true, "ip 4": true, "ip 5": true,
+				"__name__ 1": true, "__name__ 2": true, "__name__ 3": true, "__name__ 4": true, "__name__ 5": true,
+				"instance 1": true, "instance 2": true, "instance 3": true, "instance 4": true, "instance 5": true,
+				"job 1": true, "job 2": true, "job 3": true, "job 4": true, "job 5": true,
+				"Value #A": true,
+			},
+		})).
+		OverrideByName("Priority", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 80},
+		}).
+		OverrideByName("Resolves", []dashboard.DynamicConfigValue{
+			{Id: "mappings", Value: respondedYesNoMappings()},
+			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
+			{Id: "custom.width", Value: 100},
+		}).
+		OverrideByName("Is CNAME", []dashboard.DynamicConfigValue{
+			// Inverted yes/no: 1 (yes = is a CNAME) is RED, 0 is GREEN.
+			// Reuse recursionYesNoMappings since it has the same
+			// inverted polarity (1=red, 0=green).
+			{Id: "mappings", Value: recursionYesNoMappings()},
+			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
+			{Id: "custom.width", Value: 100},
+		}).
+		OverrideByName("Syntax valid", []dashboard.DynamicConfigValue{
+			{Id: "mappings", Value: respondedYesNoMappings()},
+			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
+			{Id: "custom.width", Value: 110},
+		}).
+		OverrideByName("Role", []dashboard.DynamicConfigValue{
+			{Id: "mappings", Value: mxRoleMappings()},
+			{Id: "custom.cellOptions", Value: cellOptionsColorBackground()},
+			{Id: "custom.width", Value: 110},
+		}).
+		SortBy(sortByAsc("Priority"))
+}

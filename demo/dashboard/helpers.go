@@ -91,6 +91,23 @@ func sortByAsc(displayName string) []cog.Builder[common.TableSortByFieldState] {
 	}
 }
 
+// mxRoleMappings: 0/1 → backup/primary mapping for the per-MX
+// records table's Role column (spec 008). Primary (1) is green
+// (the lowest-priority MX is the desired delivery target); backup
+// (0) is text-colored (neutral, neither warning nor error — backups
+// are normal and expected).
+func mxRoleMappings() []any {
+	return []any{
+		map[string]any{
+			"type": "value",
+			"options": map[string]any{
+				"0": map[string]any{"text": "backup", "color": "text", "index": 0},
+				"1": map[string]any{"text": "primary", "color": "green", "index": 1},
+			},
+		},
+	}
+}
+
 // emptyGlueMapping: empty-string → "(not provided)" gray mapping used
 // by the "Glue IP" column of the NS records (from parent) table.
 func emptyGlueMapping() []any {

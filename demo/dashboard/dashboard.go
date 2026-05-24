@@ -54,18 +54,23 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 		WithPanel(soaSerialsTable(yOffset))
 
 	// MX section (spec 008) — status panel + per-MX records table,
-	// both full-width. Sits between the records row and the operator
-	// row so MX health is visible at-a-glance without expanding the
-	// collapsed operator section.
-	b = b.
+	// side-by-side (w=12 each) inside a collapsible row, expanded by
+	// default. The row header sits at Y=22; both panels at Y=23. The
+	// collapsible wrapper lets operators hide the MX section if they're
+	// focused on parent/NS/SOA health and reclaim screen space.
+	b = b.WithRow(dashboard.NewRowBuilder("MX — email health").
+		Collapsed(false).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(22, yOffset), W: 24, H: 1}).
 		WithPanel(mxStatusTable(yOffset)).
-		WithPanel(mxRecordsTable(yOffset))
+		WithPanel(mxRecordsTable(yOffset)))
 
 	// Operator row — collapsed by default; contains four timeseries.
-	// Y shifted from 22 → 38 to make room for the MX section above.
+	// Y shifted from 38 → 33 after the MX section was condensed from
+	// stacked-full-width (16 grid units) into a single half-width row
+	// (10 grid units + 1 for the row header).
 	b = b.WithRow(dashboard.NewRowBuilder("Operator / debug views").
 		Collapsed(true).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(38, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(33, yOffset), W: 24, H: 1}).
 		WithPanel(probeCycleDurationTimeseries(yOffset)).
 		WithPanel(dnsQueryRateTimeseries(yOffset)).
 		WithPanel(soaSerialsTimeseries(yOffset)).

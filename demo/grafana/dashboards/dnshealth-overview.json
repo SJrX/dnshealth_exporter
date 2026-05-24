@@ -901,453 +901,467 @@
       }
     },
     {
-      "type": "table",
-      "targets": [
-        {
-          "expr": "((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) or on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1)) or on() vector(0)",
-          "instant": true,
-          "range": false,
-          "legendFormat": "Zone has MX records (or Null MX intentionally set)",
-          "refId": "A"
-        },
-        {
-          "expr": "clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1) + on(zone) ((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) * on(zone) (dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_resolved_count{zone=\"$zone\"})), 1) or on() vector(0)",
-          "instant": true,
-          "range": false,
-          "legendFormat": "All MX targets resolve",
-          "refId": "B"
-        },
-        {
-          "expr": "(dnshealth_mx_cname_count{zone=\"$zone\"} == bool 0) or on() vector(0)",
-          "instant": true,
-          "range": false,
-          "legendFormat": "No MX target is a CNAME (RFC 2181 §10.3)",
-          "refId": "C"
-        },
-        {
-          "expr": "clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) ((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) * on(zone) (dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_syntax_valid_count{zone=\"$zone\"})), 1) or on() vector(0)",
-          "instant": true,
-          "range": false,
-          "legendFormat": "All MX target hostnames syntactically valid (LDH)",
-          "refId": "D"
-        },
-        {
-          "expr": "((dnshealth_mx_has_null_mx_rr{zone=\"$zone\"} == bool 0) or on(zone) (dnshealth_mx_count{zone=\"$zone\"} == bool 1)) or on() vector(0)",
-          "instant": true,
-          "range": false,
-          "legendFormat": "No conflict between Null MX and real MX records",
-          "refId": "E"
-        }
-      ],
-      "title": "MX — status",
-      "description": "### Zone has MX records (or Null MX intentionally set)\n\n**Metric**: `dnshealth_mx_count` + `dnshealth_mx_null_mx`  \n**Why FAIL matters**: Zone publishes no MX records AND no Null MX declaration — all incoming email fails. Either publish MX records or declare Null MX (`0 .`) per RFC 7505 if no email is intended.  \n**Investigate**: per-MX records table below shows what the zone advertises; check the auth's zone file for the MX RR set.\n\n### All MX targets resolve\n\n**Metric**: count comparison `dnshealth_mx_count` vs `dnshealth_mx_resolved_count`, with explicit pass-by-default for zones that have no MX targets to check (no MX records OR Null MX)  \n**Why FAIL matters**: At least one MX target's hostname doesn't resolve to A or AAAA. Inbound mail attempts for that target will fail.  \n**Investigate**: per-MX records table — `resolves=0` column identifies the offending target. Vacuously PASSes when the zone has no MX records (row A surfaces that case) or when the zone is Null MX (no targets to resolve by definition).\n\n### No MX target is a CNAME (RFC 2181 §10.3)\n\n**Metric**: `dnshealth_mx_cname_count == 0`  \n**Why FAIL matters**: At least one MX target is an alias (CNAME), violating RFC 2181 §10.3. Many MTAs handle this inconsistently; some refuse delivery outright.  \n**Investigate**: per-MX records table — `is_cname=1` column identifies the offending target.\n\n### All MX target hostnames syntactically valid (LDH)\n\n**Metric**: count comparison `dnshealth_mx_count` vs `dnshealth_mx_syntax_valid_count`, with vacuous PASS when no MX records exist for the zone (count==0)  \n**Why FAIL matters**: At least one MX target hostname has invalid syntax (underscore, leading/trailing hyphen, etc.) per RFC 952/1123. Some strict resolvers may reject.  \n**Investigate**: per-MX records table; the same LDH check is applied to NS hostnames in spec N6 — see that row for the validator details. Vacuously PASSes when the zone has no MX records — row A surfaces that case.\n\n### No conflict between Null MX and real MX records\n\n**Metric**: derived from `dnshealth_mx_has_null_mx_rr` + `dnshealth_mx_count`  \n**Why FAIL matters**: Zone publishes a Null MX RR (`0 .`) AND additional MX records. RFC 7505 §3 requires Null MX to be the SOLE MX record; coexistence is undefined and likely interpreted differently by different MTAs.  \n**Investigate**: auth's zone file — remove either the Null MX RR (if you want to accept email) or the real MX records (if you don't). The distinction between `dnshealth_mx_null_mx` (canonical form only) and `dnshealth_mx_has_null_mx_rr` (any Null MX RR present, regardless of count) is what makes this row catchable — see spec 008 audit D-5.\n",
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
+      "type": "row",
+      "collapsed": true,
+      "title": "MX — email health",
       "gridPos": {
-        "h": 6,
+        "h": 1,
         "w": 24,
         "x": 0,
         "y": 18
       },
-      "repeatDirection": "h",
-      "transformations": [
+      "id": 0,
+      "panels": [
         {
-          "id": "reduce",
+          "type": "table",
+          "targets": [
+            {
+              "expr": "((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) or on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1)) or on() vector(0)",
+              "instant": true,
+              "range": false,
+              "legendFormat": "Zone has MX records (or Null MX intentionally set)",
+              "refId": "A"
+            },
+            {
+              "expr": "clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1) + on(zone) ((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) * on(zone) (dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_resolved_count{zone=\"$zone\"})), 1) or on() vector(0)",
+              "instant": true,
+              "range": false,
+              "legendFormat": "All MX targets resolve",
+              "refId": "B"
+            },
+            {
+              "expr": "(dnshealth_mx_cname_count{zone=\"$zone\"} == bool 0) or on() vector(0)",
+              "instant": true,
+              "range": false,
+              "legendFormat": "No MX target is a CNAME (RFC 2181 §10.3)",
+              "refId": "C"
+            },
+            {
+              "expr": "clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) ((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) * on(zone) (dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_syntax_valid_count{zone=\"$zone\"})), 1) or on() vector(0)",
+              "instant": true,
+              "range": false,
+              "legendFormat": "All MX target hostnames syntactically valid (LDH)",
+              "refId": "D"
+            },
+            {
+              "expr": "((dnshealth_mx_has_null_mx_rr{zone=\"$zone\"} == bool 0) or on(zone) (dnshealth_mx_count{zone=\"$zone\"} == bool 1)) or on() vector(0)",
+              "instant": true,
+              "range": false,
+              "legendFormat": "No conflict between Null MX and real MX records",
+              "refId": "E"
+            }
+          ],
+          "title": "MX — status",
+          "description": "### Zone has MX records (or Null MX intentionally set)\n\n**Metric**: `dnshealth_mx_count` + `dnshealth_mx_null_mx`  \n**Why FAIL matters**: Zone publishes no MX records AND no Null MX declaration — all incoming email fails. Either publish MX records or declare Null MX (`0 .`) per RFC 7505 if no email is intended.  \n**Investigate**: per-MX records table below shows what the zone advertises; check the auth's zone file for the MX RR set.\n\n### All MX targets resolve\n\n**Metric**: count comparison `dnshealth_mx_count` vs `dnshealth_mx_resolved_count`, with explicit pass-by-default for zones that have no MX targets to check (no MX records OR Null MX)  \n**Why FAIL matters**: At least one MX target's hostname doesn't resolve to A or AAAA. Inbound mail attempts for that target will fail.  \n**Investigate**: per-MX records table — `resolves=0` column identifies the offending target. Vacuously PASSes when the zone has no MX records (row A surfaces that case) or when the zone is Null MX (no targets to resolve by definition).\n\n### No MX target is a CNAME (RFC 2181 §10.3)\n\n**Metric**: `dnshealth_mx_cname_count == 0`  \n**Why FAIL matters**: At least one MX target is an alias (CNAME), violating RFC 2181 §10.3. Many MTAs handle this inconsistently; some refuse delivery outright.  \n**Investigate**: per-MX records table — `is_cname=1` column identifies the offending target.\n\n### All MX target hostnames syntactically valid (LDH)\n\n**Metric**: count comparison `dnshealth_mx_count` vs `dnshealth_mx_syntax_valid_count`, with vacuous PASS when no MX records exist for the zone (count==0)  \n**Why FAIL matters**: At least one MX target hostname has invalid syntax (underscore, leading/trailing hyphen, etc.) per RFC 952/1123. Some strict resolvers may reject.  \n**Investigate**: per-MX records table; the same LDH check is applied to NS hostnames in spec N6 — see that row for the validator details. Vacuously PASSes when the zone has no MX records — row A surfaces that case.\n\n### No conflict between Null MX and real MX records\n\n**Metric**: derived from `dnshealth_mx_has_null_mx_rr` + `dnshealth_mx_count`  \n**Why FAIL matters**: Zone publishes a Null MX RR (`0 .`) AND additional MX records. RFC 7505 §3 requires Null MX to be the SOLE MX record; coexistence is undefined and likely interpreted differently by different MTAs.  \n**Investigate**: auth's zone file — remove either the Null MX RR (if you want to accept email) or the real MX records (if you don't). The distinction between `dnshealth_mx_null_mx` (canonical form only) and `dnshealth_mx_has_null_mx_rr` (any Null MX RR present, regardless of count) is what makes this row catchable — see spec 008 audit D-5.\n",
+          "transparent": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 19
+          },
+          "repeatDirection": "h",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "last"
+                ],
+                "mode": "seriesToRows"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Field": "Test",
+                  "Last": "Result"
+                },
+                "indexByName": {
+                  "Field": 0,
+                  "Last": 1
+                }
+              }
+            }
+          ],
           "options": {
-            "reducers": [
-              "last"
+            "frameIndex": 0,
+            "showHeader": true,
+            "showTypeIcons": false,
+            "footer": {
+              "show": false,
+              "reducer": null,
+              "countRows": false
+            },
+            "cellHeight": "sm"
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Result"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "options": {
+                          "0": {
+                            "color": "red",
+                            "index": 0,
+                            "text": "FAIL"
+                          },
+                          "1": {
+                            "color": "green",
+                            "index": 1,
+                            "text": "PASS"
+                          }
+                        },
+                        "type": "value"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "targets": [
+            {
+              "expr": "dnshealth_mx_info{zone=\"$zone\"}",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "A"
+            },
+            {
+              "expr": "dnshealth_mx_resolves{zone=\"$zone\"}",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "B"
+            },
+            {
+              "expr": "dnshealth_mx_is_cname{zone=\"$zone\"}",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "C"
+            },
+            {
+              "expr": "dnshealth_mx_syntax_valid{zone=\"$zone\"}",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "D"
+            },
+            {
+              "expr": "dnshealth_mx_is_primary{zone=\"$zone\"}",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "E"
+            }
+          ],
+          "title": "MX records — per zone",
+          "description": "Per-MX details for the selected zone: target hostname, priority, resolution status, CNAME status, syntax validity, role (primary = lowest-priority MX; ties at minimum priority all read \"primary\"). Empty cells in resolves/is-CNAME columns indicate Null MX's \".\" sentinel target — those checks intentionally don't apply per RFC 7505. SMTP-level reachability is out of scope; use blackbox_exporter with an SMTP prober for that.",
+          "transparent": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 19
+          },
+          "repeatDirection": "h",
+          "transformations": [
+            {
+              "id": "joinByField",
+              "options": {
+                "byField": "target",
+                "mode": "outer"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Value #B": "Resolves",
+                  "Value #C": "Is CNAME",
+                  "Value #D": "Syntax valid",
+                  "Value #E": "Role",
+                  "priority": "Priority",
+                  "target": "Target"
+                },
+                "indexByName": {
+                  "Value #B": 2,
+                  "Value #C": 3,
+                  "Value #D": 4,
+                  "Value #E": 5,
+                  "priority": 1,
+                  "target": 0
+                },
+                "excludeByName": {
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "Time 4": true,
+                  "Time 5": true,
+                  "Value #A": true,
+                  "__name__ 1": true,
+                  "__name__ 2": true,
+                  "__name__ 3": true,
+                  "__name__ 4": true,
+                  "__name__ 5": true,
+                  "check 1": true,
+                  "check 2": true,
+                  "check 3": true,
+                  "check 4": true,
+                  "check 5": true,
+                  "instance 1": true,
+                  "instance 2": true,
+                  "instance 3": true,
+                  "instance 4": true,
+                  "instance 5": true,
+                  "ip 1": true,
+                  "ip 2": true,
+                  "ip 3": true,
+                  "ip 4": true,
+                  "ip 5": true,
+                  "job 1": true,
+                  "job 2": true,
+                  "job 3": true,
+                  "job 4": true,
+                  "job 5": true,
+                  "nameserver 1": true,
+                  "nameserver 2": true,
+                  "nameserver 3": true,
+                  "nameserver 4": true,
+                  "nameserver 5": true,
+                  "zone 1": true,
+                  "zone 2": true,
+                  "zone 3": true,
+                  "zone 4": true,
+                  "zone 5": true
+                }
+              }
+            }
+          ],
+          "options": {
+            "frameIndex": 0,
+            "showHeader": true,
+            "showTypeIcons": false,
+            "sortBy": [
+              {
+                "displayName": "Priority"
+              }
             ],
-            "mode": "seriesToRows"
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "Field": "Test",
-              "Last": "Result"
+            "footer": {
+              "show": false,
+              "reducer": null,
+              "countRows": false
             },
-            "indexByName": {
-              "Field": 0,
-              "Last": 1
-            }
+            "cellHeight": "sm"
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Priority"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Resolves"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "options": {
+                          "0": {
+                            "color": "red",
+                            "index": 0,
+                            "text": "no"
+                          },
+                          "1": {
+                            "color": "green",
+                            "index": 1,
+                            "text": "yes"
+                          }
+                        },
+                        "type": "value"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Is CNAME"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "options": {
+                          "0": {
+                            "color": "green",
+                            "index": 0,
+                            "text": "no"
+                          },
+                          "1": {
+                            "color": "red",
+                            "index": 1,
+                            "text": "yes"
+                          }
+                        },
+                        "type": "value"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Syntax valid"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "options": {
+                          "0": {
+                            "color": "red",
+                            "index": 0,
+                            "text": "no"
+                          },
+                          "1": {
+                            "color": "green",
+                            "index": 1,
+                            "text": "yes"
+                          }
+                        },
+                        "type": "value"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Role"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "options": {
+                          "0": {
+                            "color": "text",
+                            "index": 0,
+                            "text": "backup"
+                          },
+                          "1": {
+                            "color": "green",
+                            "index": 1,
+                            "text": "primary"
+                          }
+                        },
+                        "type": "value"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              }
+            ]
           }
         }
-      ],
-      "options": {
-        "frameIndex": 0,
-        "showHeader": true,
-        "showTypeIcons": false,
-        "footer": {
-          "show": false,
-          "reducer": null,
-          "countRows": false
-        },
-        "cellHeight": "sm"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Result"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "0": {
-                        "color": "red",
-                        "index": 0,
-                        "text": "FAIL"
-                      },
-                      "1": {
-                        "color": "green",
-                        "index": 1,
-                        "text": "PASS"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "basic",
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 80
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "type": "table",
-      "targets": [
-        {
-          "expr": "dnshealth_mx_info{zone=\"$zone\"}",
-          "instant": true,
-          "range": false,
-          "format": "table",
-          "refId": "A"
-        },
-        {
-          "expr": "dnshealth_mx_resolves{zone=\"$zone\"}",
-          "instant": true,
-          "range": false,
-          "format": "table",
-          "refId": "B"
-        },
-        {
-          "expr": "dnshealth_mx_is_cname{zone=\"$zone\"}",
-          "instant": true,
-          "range": false,
-          "format": "table",
-          "refId": "C"
-        },
-        {
-          "expr": "dnshealth_mx_syntax_valid{zone=\"$zone\"}",
-          "instant": true,
-          "range": false,
-          "format": "table",
-          "refId": "D"
-        },
-        {
-          "expr": "dnshealth_mx_is_primary{zone=\"$zone\"}",
-          "instant": true,
-          "range": false,
-          "format": "table",
-          "refId": "E"
-        }
-      ],
-      "title": "MX records — per zone",
-      "description": "Per-MX details for the selected zone: target hostname, priority, resolution status, CNAME status, syntax validity, role (primary = lowest-priority MX; ties at minimum priority all read \"primary\"). Empty cells in resolves/is-CNAME columns indicate Null MX's \".\" sentinel target — those checks intentionally don't apply per RFC 7505. SMTP-level reachability is out of scope; use blackbox_exporter with an SMTP prober for that.",
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${prometheus}"
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      },
-      "repeatDirection": "h",
-      "transformations": [
-        {
-          "id": "joinByField",
-          "options": {
-            "byField": "target",
-            "mode": "outer"
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "Value #B": "Resolves",
-              "Value #C": "Is CNAME",
-              "Value #D": "Syntax valid",
-              "Value #E": "Role",
-              "priority": "Priority",
-              "target": "Target"
-            },
-            "indexByName": {
-              "Value #B": 2,
-              "Value #C": 3,
-              "Value #D": 4,
-              "Value #E": 5,
-              "priority": 1,
-              "target": 0
-            },
-            "excludeByName": {
-              "Time 1": true,
-              "Time 2": true,
-              "Time 3": true,
-              "Time 4": true,
-              "Time 5": true,
-              "Value #A": true,
-              "__name__ 1": true,
-              "__name__ 2": true,
-              "__name__ 3": true,
-              "__name__ 4": true,
-              "__name__ 5": true,
-              "check 1": true,
-              "check 2": true,
-              "check 3": true,
-              "check 4": true,
-              "check 5": true,
-              "instance 1": true,
-              "instance 2": true,
-              "instance 3": true,
-              "instance 4": true,
-              "instance 5": true,
-              "ip 1": true,
-              "ip 2": true,
-              "ip 3": true,
-              "ip 4": true,
-              "ip 5": true,
-              "job 1": true,
-              "job 2": true,
-              "job 3": true,
-              "job 4": true,
-              "job 5": true,
-              "nameserver 1": true,
-              "nameserver 2": true,
-              "nameserver 3": true,
-              "nameserver 4": true,
-              "nameserver 5": true,
-              "zone 1": true,
-              "zone 2": true,
-              "zone 3": true,
-              "zone 4": true,
-              "zone 5": true
-            }
-          }
-        }
-      ],
-      "options": {
-        "frameIndex": 0,
-        "showHeader": true,
-        "showTypeIcons": false,
-        "sortBy": [
-          {
-            "displayName": "Priority"
-          }
-        ],
-        "footer": {
-          "show": false,
-          "reducer": null,
-          "countRows": false
-        },
-        "cellHeight": "sm"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Priority"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 80
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Resolves"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "0": {
-                        "color": "red",
-                        "index": 0,
-                        "text": "no"
-                      },
-                      "1": {
-                        "color": "green",
-                        "index": 1,
-                        "text": "yes"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "basic",
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 100
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Is CNAME"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "0": {
-                        "color": "green",
-                        "index": 0,
-                        "text": "no"
-                      },
-                      "1": {
-                        "color": "red",
-                        "index": 1,
-                        "text": "yes"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "basic",
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 100
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Syntax valid"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "0": {
-                        "color": "red",
-                        "index": 0,
-                        "text": "no"
-                      },
-                      "1": {
-                        "color": "green",
-                        "index": 1,
-                        "text": "yes"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "basic",
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 110
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Role"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "0": {
-                        "color": "text",
-                        "index": 0,
-                        "text": "backup"
-                      },
-                      "1": {
-                        "color": "green",
-                        "index": 1,
-                        "text": "primary"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "basic",
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 110
-              }
-            ]
-          }
-        ]
-      }
+      ]
     },
     {
       "type": "row",
@@ -1357,7 +1371,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 29
       },
       "id": 0,
       "panels": [
@@ -1381,7 +1395,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 35
+            "y": 30
           },
           "repeatDirection": "h",
           "options": {
@@ -1431,7 +1445,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 35
+            "y": 30
           },
           "repeatDirection": "h",
           "options": {
@@ -1494,7 +1508,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 43
+            "y": 38
           },
           "repeatDirection": "h",
           "options": {
@@ -1544,7 +1558,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 43
+            "y": 38
           },
           "repeatDirection": "h",
           "options": {

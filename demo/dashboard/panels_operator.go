@@ -50,7 +50,7 @@ func probeCycleDurationTimeseries(yOffset uint32) *timeseries.PanelBuilder {
 	return timeseries.NewPanelBuilder().
 		Title("Probe cycle duration").
 		Description("Wall time of each probe cycle, from dnshealth_probe_cycle_duration_seconds.").
-		GridPos(gridPos(0, subY(23, yOffset), 12, 8)).
+		GridPos(gridPos(0, subY(39, yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		Unit("s").
 		ColorScheme(classicColor()).
@@ -69,7 +69,7 @@ func dnsQueryRateTimeseries(yOffset uint32) *timeseries.PanelBuilder {
 	return timeseries.NewPanelBuilder().
 		Title("Query rate and delegation cache hit ratio").
 		Description("Left axis: per-server query rate. Cache ratio = hits / (hits + misses).").
-		GridPos(gridPos(12, subY(23, yOffset), 12, 8)).
+		GridPos(gridPos(12, subY(39, yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		ColorScheme(classicColor()).
 		Legend(tableLegend("mean")).
@@ -96,7 +96,7 @@ func soaSerialsTimeseries(yOffset uint32) *timeseries.PanelBuilder {
 	return timeseries.NewPanelBuilder().
 		Title("SOA serials per nameserver over time — ${zone}").
 		Description("Each line is one nameserver for the selected zone. Lines overlap when primaries agree; divergence appears as parallel non-overlapping lines.").
-		GridPos(gridPos(0, subY(31, yOffset), 12, 8)).
+		GridPos(gridPos(0, subY(47, yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		ColorScheme(classicColor()).
 		LineInterpolation(common.LineInterpolationStepAfter).
@@ -115,7 +115,7 @@ func queryDurationTimeseries(yOffset uint32) *timeseries.PanelBuilder {
 	return timeseries.NewPanelBuilder().
 		Title("Query duration (per check / nameserver) — ${zone}").
 		Description("dnshealth_query_duration_seconds for the selected zone — useful for spotting slow nameservers or check types.").
-		GridPos(gridPos(12, subY(31, yOffset), 12, 8)).
+		GridPos(gridPos(12, subY(47, yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		Unit("s").
 		ColorScheme(classicColor()).

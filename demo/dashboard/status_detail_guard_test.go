@@ -22,6 +22,7 @@ func TestStatusChecksHaveDetail(t *testing.T) {
 		{"parentStatusChecks", parentStatusChecks},
 		{"nsStatusChecks", nsStatusChecks},
 		{"soaStatusChecks", soaStatusChecks},
+		{"mxStatusChecks", mxStatusChecks},
 	}
 
 	for _, tc := range cases {

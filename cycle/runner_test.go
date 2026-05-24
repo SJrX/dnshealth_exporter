@@ -689,3 +689,240 @@ func TestCycleRunner_DelegationCacheCountersTrackHitsAndMisses(t *testing.T) {
 		t.Errorf("after invalidate + third cycle: hits=%v, want 1 (no new hit)", hits3)
 	}
 }
+
+// TestCycleRunner_MXCountResetsAndZeroes verifies the per-cycle
+// Reset+Set(0) pattern for dnshealth_mx_count and friends — a zone
+// with zero MX records MUST consistently emit explicit 0 gauges
+// (not "no series at all") across consecutive cycles, so PromQL
+// can distinguish "no MX records" from "no data this cycle". See
+// spec 008 FR-007 / R-2.
+func TestCycleRunner_MXCountResetsAndZeroes(t *testing.T) {
+	// Fixture Setup — zone with no MX records.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			// No MX records.
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 5 * time.Second,
+		ZoneDeadline: 30 * time.Second,
+	}
+
+	// Exercise SUT — two cycles to prove the Reset+Set pattern
+	// works across cycles (not just first).
+	runner.Run(context.Background(), cfg)
+	runner.Run(context.Background(), cfg)
+
+	// Verification — all three per-zone count gauges + NullMX
+	// emit explicit 0 for the zone with no MX records.
+	AssertGauge(t, permRegistry, "dnshealth_mx_count",
+		WithLabels("zone", "example.test"),
+		WithValue(0))
+	AssertGauge(t, permRegistry, "dnshealth_mx_resolved_count",
+		WithLabels("zone", "example.test"),
+		WithValue(0))
+	AssertGauge(t, permRegistry, "dnshealth_mx_cname_count",
+		WithLabels("zone", "example.test"),
+		WithValue(0))
+	AssertGauge(t, permRegistry, "dnshealth_mx_null_mx",
+		WithLabels("zone", "example.test"),
+		WithValue(0))
+}
+
+// TestCycleRunner_MXNullMXDetected verifies the runner sets the
+// per-zone NullMX gauge to 1 for a zone publishing exactly one MX
+// record with preference 0 and target "." (canonical RFC 7505 form).
+// The detection is in the runner's aggregation pass (not the
+// prober) per spec 008 R-2 / data-model.md edge cases.
+func TestCycleRunner_MXNullMXDetected(t *testing.T) {
+	// Fixture Setup — zone with Null MX.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			MX("example.test", 0, "."), // canonical Null MX
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 5 * time.Second,
+		ZoneDeadline: 30 * time.Second,
+	}
+
+	// Exercise SUT
+	runner.Run(context.Background(), cfg)
+
+	// Verification — runner-derived NullMX gauge reads 1.
+	AssertGauge(t, permRegistry, "dnshealth_mx_null_mx",
+		WithLabels("zone", "example.test"),
+		WithValue(1))
+}
+
+// TestCycleRunner_MXNullMXNotEmittedForConflict verifies the runner
+// reads NullMX=0 when a zone publishes both a Null MX and a real MX
+// record (RFC 7505 §3 requires Null MX be the SOLE MX RR; coexistence
+// is malformed). The dashboard row E catches this configuration error
+// separately via its `(null_mx == 0) OR (count == 1)` predicate.
+func TestCycleRunner_MXNullMXNotEmittedForConflict(t *testing.T) {
+	// Fixture Setup — Null MX + real MX conflict.
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			MX("example.test", 0, "."),
+			MX("example.test", 10, "real.example.test"),
+			A("real.example.test", "127.240.0.3"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 5 * time.Second,
+		ZoneDeadline: 30 * time.Second,
+	}
+
+	// Exercise SUT
+	runner.Run(context.Background(), cfg)
+
+	// Verification — NullMX reads 0 (canonical form requires a
+	// SINGLE MX RR), MXHasNullMXRR reads 1 (the Null MX RR IS
+	// present though), and count > 1. The row E predicate
+	// `(has_null_mx_rr == 0) OR (count == 1)` evaluates FALSE
+	// for this combination — i.e., FAIL, which is what FR-010
+	// requires. Verified explicitly below; prior to the audit
+	// D-5 fix, NullMX alone made row E a tautology (always
+	// PASS) and FR-010 was dead code.
+	AssertGauge(t, permRegistry, "dnshealth_mx_null_mx",
+		WithLabels("zone", "example.test"),
+		WithValue(0))
+	AssertGauge(t, permRegistry, "dnshealth_mx_has_null_mx_rr",
+		WithLabels("zone", "example.test"),
+		WithValue(1))
+	AssertGauge(t, permRegistry, "dnshealth_mx_count",
+		WithLabels("zone", "example.test"),
+		WithValue(2))
+	// Row E logical evaluation: should FAIL.
+	hasNull := gaugeFloatValue(t, permRegistry, "dnshealth_mx_has_null_mx_rr", "zone", "example.test")
+	count := gaugeFloatValue(t, permRegistry, "dnshealth_mx_count", "zone", "example.test")
+	rowEPass := hasNull == 0 || count == 1
+	if rowEPass {
+		t.Errorf("row E predicate evaluated to PASS for Null-MX-conflict zone; expected FAIL (hasNull=%v count=%v)", hasNull, count)
+	}
+}
+
+// gaugeFloatValue reads a single gauge value by one label pair.
+// Returns 0 if absent. Tiny helper for tests that need to
+// evaluate composite PromQL predicates in Go (e.g., row E above).
+func gaugeFloatValue(t *testing.T, reg *prometheus.Registry, name, labelKey, labelValue string) float64 {
+	t.Helper()
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gathering metrics: %v", err)
+	}
+	for _, f := range families {
+		if f.GetName() != name {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == labelKey && lp.GetValue() == labelValue {
+					return m.GetGauge().GetValue()
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// TestCycleRunner_MXTiedPrimaries — multi-MX zone with TWO MX records
+// tied at the same minimum priority (a legitimate load-balancing
+// pattern). The runner's is_primary derivation must mark BOTH as
+// primary, not arbitrarily pick one. Spec 008 US3 / R-3.
+func TestCycleRunner_MXTiedPrimaries(t *testing.T) {
+	// Fixture Setup — two MXes both at preference 10 (the minimum).
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+CycleTestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			MX("example.test", 10, "mail-a.example.test"),
+			MX("example.test", 10, "mail-b.example.test"),
+			A("mail-a.example.test", "127.240.0.3"),
+			A("mail-b.example.test", "127.240.0.4"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	permRegistry := prometheus.NewRegistry()
+	runner := cycle.NewRunner(
+		cache.NewDelegationCache(30*time.Minute),
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		permRegistry,
+	)
+	cfg := &config.Config{
+		Zones:        []string{"example.test"},
+		QueryTimeout: 5 * time.Second,
+		ZoneDeadline: 30 * time.Second,
+	}
+
+	// Exercise SUT
+	runner.Run(context.Background(), cfg)
+
+	// Verification — BOTH targets at the tied minimum priority
+	// must be flagged as primary.
+	AssertGauge(t, permRegistry, "dnshealth_mx_is_primary",
+		WithLabels("zone", "example.test", "target", "mail-a.example.test."),
+		WithValue(1))
+	AssertGauge(t, permRegistry, "dnshealth_mx_is_primary",
+		WithLabels("zone", "example.test", "target", "mail-b.example.test."),
+		WithValue(1))
+}

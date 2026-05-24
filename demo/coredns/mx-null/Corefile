@@ -1,0 +1,11 @@
+# Authoritative for mx-null.demo. — RFC 7505 Null MX. The zone
+# explicitly opts out of email by publishing a single MX RR with
+# preference 0 and target ".". The exporter recognizes this and
+# the MX-presence row stays PASS for this zone (no alert noise on
+# intentional no-email zones — spec 008 US2).
+
+mx-null.demo. {
+    file /zones/mx-null.demo.zone
+    log
+    errors
+}

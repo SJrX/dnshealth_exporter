@@ -267,6 +267,65 @@ grep -E '^dnshealth_ns_record\{[^}]+\} 1$' "${METRICS_FILE}" \
 grep -E '^dnshealth_dns_queries_total\{server="172\.31\.0\.17"\} [1-9]' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_dns_queries_total for 172.31.0.17 (dup-glue) is missing or zero"
 
+echo "A4g: mx-healthy.demo. surfaces multi-MX with primary/backup (spec 008 US1)"
+# Two MX records at priorities 10 + 20; both resolve; neither is
+# CNAMEd; both LDH-valid. Primary classification: only the
+# priority-10 MX gets is_primary=1.
+grep -E '^dnshealth_mx_info\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="mx-healthy.demo."' \
+    | grep -F 'target="mail-a.mx-healthy.demo."' \
+    | grep -F 'priority="00010"' >/dev/null \
+    || fail "mx-healthy.demo.: priority-10 MX info gauge missing"
+grep -E '^dnshealth_mx_info\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="mx-healthy.demo."' \
+    | grep -F 'target="mail-b.mx-healthy.demo."' \
+    | grep -F 'priority="00020"' >/dev/null \
+    || fail "mx-healthy.demo.: priority-20 MX info gauge missing"
+grep -E '^dnshealth_mx_count\{zone="mx-healthy\.demo\."\} 2$' "${METRICS_FILE}" >/dev/null \
+    || fail "mx-healthy.demo.: mx_count != 2"
+grep -E '^dnshealth_mx_resolved_count\{zone="mx-healthy\.demo\."\} 2$' "${METRICS_FILE}" >/dev/null \
+    || fail "mx-healthy.demo.: mx_resolved_count != 2"
+grep -E '^dnshealth_mx_cname_count\{zone="mx-healthy\.demo\."\} 0$' "${METRICS_FILE}" >/dev/null \
+    || fail "mx-healthy.demo.: mx_cname_count != 0"
+grep -E '^dnshealth_mx_null_mx\{zone="mx-healthy\.demo\."\} 0$' "${METRICS_FILE}" >/dev/null \
+    || fail "mx-healthy.demo.: mx_null_mx != 0"
+grep -E '^dnshealth_mx_is_primary\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="mx-healthy.demo."' \
+    | grep -F 'target="mail-a.mx-healthy.demo."' >/dev/null \
+    || fail "mx-healthy.demo.: mail-a (priority 10) not flagged as primary"
+grep -E '^dnshealth_mx_is_primary\{[^}]+\} 0$' "${METRICS_FILE}" \
+    | grep -F 'zone="mx-healthy.demo."' \
+    | grep -F 'target="mail-b.mx-healthy.demo."' >/dev/null \
+    || fail "mx-healthy.demo.: mail-b (priority 20) incorrectly flagged as primary"
+
+echo "A4h: mx-broken.demo. surfaces CNAMEd + unresolvable MX targets (spec 008 US1)"
+# Priority 10 target is a CNAME (RFC 2181 §10.3 violation).
+grep -E '^dnshealth_mx_is_cname\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="mx-broken.demo."' \
+    | grep -F 'target="cname-mail.mx-broken.demo."' >/dev/null \
+    || fail "mx-broken.demo.: cname-mail not flagged as is_cname=1"
+# Priority 20 target doesn't resolve anywhere.
+grep -E '^dnshealth_mx_resolves\{[^}]+\} 0$' "${METRICS_FILE}" \
+    | grep -F 'zone="mx-broken.demo."' \
+    | grep -F 'target="missing-mail.mx-broken.demo."' >/dev/null \
+    || fail "mx-broken.demo.: missing-mail not flagged as resolves=0"
+grep -E '^dnshealth_mx_cname_count\{zone="mx-broken\.demo\."\} 1$' "${METRICS_FILE}" >/dev/null \
+    || fail "mx-broken.demo.: mx_cname_count != 1"
+
+echo "A4i: mx-null.demo. surfaces RFC 7505 Null MX (spec 008 US2)"
+# Zone publishes `0 .` (canonical Null MX). The exporter recognizes
+# this and emits dnshealth_mx_null_mx=1 + a single info gauge for
+# the "." sentinel target.
+grep -E '^dnshealth_mx_null_mx\{zone="mx-null\.demo\."\} 1$' "${METRICS_FILE}" >/dev/null \
+    || fail "mx-null.demo.: mx_null_mx != 1 (Null MX not detected)"
+grep -E '^dnshealth_mx_count\{zone="mx-null\.demo\."\} 1$' "${METRICS_FILE}" >/dev/null \
+    || fail "mx-null.demo.: mx_count != 1 (Null MX should have single MX RR)"
+grep -E '^dnshealth_mx_info\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="mx-null.demo."' \
+    | grep -F 'target="."' \
+    | grep -F 'priority="00000"' >/dev/null \
+    || fail "mx-null.demo.: info gauge for Null MX sentinel \".\" missing"
+
 echo "A5: build info present"
 grep -F 'dnshealth_build_info' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_build_info not present"

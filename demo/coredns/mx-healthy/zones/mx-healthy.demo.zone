@@ -1,0 +1,26 @@
+; mx-healthy.demo. — healthy multi-MX zone for spec 008's MX
+; prober. Two MXes at priorities 10 + 20 (primary + backup),
+; both targets in-zone with A records, neither a CNAME.
+
+$ORIGIN mx-healthy.demo.
+$TTL 30
+
+@   IN  SOA  ns1.mx-healthy.demo. admin.mx-healthy.demo. (
+            2026052301  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.mx-healthy.demo.
+
+; MX records: priority 10 = primary, 20 = backup.
+@     IN  MX   10 mail-a.mx-healthy.demo.
+@     IN  MX   20 mail-b.mx-healthy.demo.
+
+ns1     IN  A    172.31.0.22
+mail-a  IN  A    172.31.0.22
+mail-b  IN  A    172.31.0.22
+
+@       IN  A    172.31.0.22

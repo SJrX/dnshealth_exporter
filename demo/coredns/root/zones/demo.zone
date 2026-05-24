@@ -110,3 +110,21 @@ hidden-master              IN  NS   ns1.hidden-master.demo.
 hidden-master              IN  NS   ns2.hidden-master.demo.
 ns1.hidden-master          IN  A    172.31.0.21
 ns2.hidden-master          IN  A    172.31.0.21
+
+; mx-healthy.demo. — spec 008 MX prober happy-path demo. In-zone
+; NS at 172.31.0.22; auth publishes 2 MX records (priorities 10 +
+; 20) with resolvable in-zone targets.
+mx-healthy                 IN  NS   ns1.mx-healthy.demo.
+ns1.mx-healthy             IN  A    172.31.0.22
+
+; mx-broken.demo. — spec 008 MX prober failure-path demo. In-zone
+; NS at 172.31.0.24; auth publishes 2 MX records exercising the
+; CNAMEd-target (RFC 2181 §10.3 violation) and unresolvable-target
+; failure modes.
+mx-broken                  IN  NS   ns1.mx-broken.demo.
+ns1.mx-broken              IN  A    172.31.0.24
+
+; mx-null.demo. — spec 008 US2 Null MX demo. In-zone NS at
+; 172.31.0.23; auth publishes a single MX RR `0 .` per RFC 7505.
+mx-null                    IN  NS   ns1.mx-null.demo.
+ns1.mx-null                IN  A    172.31.0.23

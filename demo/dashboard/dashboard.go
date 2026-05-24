@@ -53,10 +53,19 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 		WithPanel(selfNSRecordsTable(yOffset)).
 		WithPanel(soaSerialsTable(yOffset))
 
+	// MX section (spec 008) — status panel + per-MX records table,
+	// both full-width. Sits between the records row and the operator
+	// row so MX health is visible at-a-glance without expanding the
+	// collapsed operator section.
+	b = b.
+		WithPanel(mxStatusTable(yOffset)).
+		WithPanel(mxRecordsTable(yOffset))
+
 	// Operator row — collapsed by default; contains four timeseries.
+	// Y shifted from 22 → 38 to make room for the MX section above.
 	b = b.WithRow(dashboard.NewRowBuilder("Operator / debug views").
 		Collapsed(true).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(22, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(38, yOffset), W: 24, H: 1}).
 		WithPanel(probeCycleDurationTimeseries(yOffset)).
 		WithPanel(dnsQueryRateTimeseries(yOffset)).
 		WithPanel(soaSerialsTimeseries(yOffset)).

@@ -96,8 +96,8 @@ curl -s http://localhost:9053/metrics | grep 'dnshealth_mx_'
 For the demo's `mx-healthy.demo.` zone (two healthy MXes at priorities 10 + 20):
 
 ```text
-dnshealth_mx_info{zone="mx-healthy.demo.",target="mail-a.mx-healthy.demo.",priority="10"} 1
-dnshealth_mx_info{zone="mx-healthy.demo.",target="mail-b.mx-healthy.demo.",priority="20"} 1
+dnshealth_mx_info{zone="mx-healthy.demo.",target="mail-a.mx-healthy.demo.",priority="00010"} 1
+dnshealth_mx_info{zone="mx-healthy.demo.",target="mail-b.mx-healthy.demo.",priority="00020"} 1
 dnshealth_mx_resolves{zone="mx-healthy.demo.",target="mail-a.mx-healthy.demo."} 1
 dnshealth_mx_resolves{zone="mx-healthy.demo.",target="mail-b.mx-healthy.demo."} 1
 dnshealth_mx_is_primary{zone="mx-healthy.demo.",target="mail-a.mx-healthy.demo."} 1
@@ -111,7 +111,7 @@ dnshealth_mx_cname_count{zone="mx-healthy.demo."} 0
 For `mx-null.demo.` (Null MX):
 
 ```text
-dnshealth_mx_info{zone="mx-null.demo.",target=".",priority="0"} 1
+dnshealth_mx_info{zone="mx-null.demo.",target=".",priority="00000"} 1
 dnshealth_mx_null_mx{zone="mx-null.demo."} 1
 dnshealth_mx_count{zone="mx-null.demo."} 1
 ```

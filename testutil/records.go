@@ -133,3 +133,19 @@ func CNAME(name, target string) dns.RR {
 		Target: dns.Fqdn(target),
 	}
 }
+
+// MX creates a dns.MX record for a zone. Preference is the priority
+// (lower = preferred per RFC 5321 §5.1). For Null MX (RFC 7505) use
+// preference 0 and exchange ".".
+func MX(zone string, preference uint16, exchange string) dns.RR {
+	return &dns.MX{
+		Hdr: dns.RR_Header{
+			Name:   dns.Fqdn(zone),
+			Rrtype: dns.TypeMX,
+			Class:  dns.ClassINET,
+			Ttl:    300,
+		},
+		Preference: preference,
+		Mx:         dns.Fqdn(exchange),
+	}
+}

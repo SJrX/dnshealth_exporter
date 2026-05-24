@@ -1,0 +1,41 @@
+; mx-broken.demo. — broken email setup for spec 008's MX prober.
+; Two MX records:
+;   priority 10 → cname-mail (the target IS a CNAME — RFC 2181
+;                              §10.3 violation, MTAs handle
+;                              inconsistently)
+;   priority 20 → missing-mail (target has NO records anywhere —
+;                                resolution fails)
+;
+; Dashboard expectations:
+;   row A (presence) PASS — zone HAS MX records
+;   row B (resolves) FAIL — missing-mail doesn't resolve
+;   row C (no CNAMEs) FAIL — cname-mail is a CNAME
+;   row D (syntax) PASS — both hostnames are LDH-valid
+
+$ORIGIN mx-broken.demo.
+$TTL 30
+
+@   IN  SOA  ns1.mx-broken.demo. admin.mx-broken.demo. (
+            2026052301  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.mx-broken.demo.
+
+@     IN  MX   10 cname-mail.mx-broken.demo.
+@     IN  MX   20 missing-mail.mx-broken.demo.
+
+; cname-mail IS a CNAME — the RFC 2181 §10.3 violation. The CNAME
+; chain resolves (real-mail has an A) but the MX record points at
+; an alias, not a hostname.
+cname-mail   IN  CNAME  real-mail.mx-broken.demo.
+real-mail    IN  A      172.31.0.24
+
+; missing-mail has NO A/AAAA records anywhere — unresolvable.
+; (Just the absence of records here.)
+
+ns1          IN  A      172.31.0.24
+@            IN  A      172.31.0.24

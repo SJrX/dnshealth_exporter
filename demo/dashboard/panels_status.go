@@ -46,11 +46,11 @@ func buildStatusPanelDescription(checks []statusCheck) string {
 	return b.String()
 }
 
-func statusTable(title string, x, yOffset uint32, checks []statusCheck) *table.PanelBuilder {
+func statusTable(title string, pos dashboard.GridPos, checks []statusCheck) *table.PanelBuilder {
 	b := table.NewPanelBuilder().
 		Title(title).
 		Description(buildStatusPanelDescription(checks)).
-		GridPos(gridPos(x, subY(4, yOffset), 8, 8)).
+		GridPos(pos).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).
@@ -208,13 +208,65 @@ var soaStatusChecks = []statusCheck{
 }
 
 func parentStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("Parent — status", 0, yOffset, parentStatusChecks)
+	return statusTable("Parent — status", gridPos(0, subY(4, yOffset), 8, 8), parentStatusChecks)
 }
 
 func nsStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("NS — status", 8, yOffset, nsStatusChecks)
+	return statusTable("NS — status", gridPos(8, subY(4, yOffset), 8, 8), nsStatusChecks)
 }
 
 func soaStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("SOA — status", 16, yOffset, soaStatusChecks)
+	return statusTable("SOA — status", gridPos(16, subY(4, yOffset), 8, 8), soaStatusChecks)
+}
+
+// MX status checks (spec 008). Row B includes the Null-MX
+// suppression branch per /speckit-analyze C1 remediation —
+// without it, Null-MX zones spuriously FAIL because the `.`
+// target intentionally has no `mx_resolves` emission.
+var mxStatusChecks = []statusCheck{
+	{"A",
+		`((dnshealth_mx_count{zone="$zone"} > bool 0) or on(zone) (dnshealth_mx_null_mx{zone="$zone"} == bool 1)) or on() vector(0)`,
+		"Zone has MX records (or Null MX intentionally set)",
+		"**Metric**: `dnshealth_mx_count` + `dnshealth_mx_null_mx`  \n" +
+			"**Why FAIL matters**: Zone publishes no MX records AND no Null MX declaration — all incoming email fails. Either publish MX records or declare Null MX (`0 .`) per RFC 7505 if no email is intended.  \n" +
+			"**Investigate**: per-MX records table below shows what the zone advertises; check the auth's zone file for the MX RR set.",
+	},
+	{"B",
+		`clamp_max((dnshealth_mx_count{zone="$zone"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone="$zone"} == bool 1) + on(zone) ((dnshealth_mx_count{zone="$zone"} > bool 0) * on(zone) (dnshealth_mx_count{zone="$zone"} == bool dnshealth_mx_resolved_count{zone="$zone"})), 1) or on() vector(0)`,
+		"All MX targets resolve",
+		"**Metric**: count comparison `dnshealth_mx_count` vs `dnshealth_mx_resolved_count`, with explicit pass-by-default for zones that have no MX targets to check (no MX records OR Null MX)  \n" +
+			"**Why FAIL matters**: At least one MX target's hostname doesn't resolve to A or AAAA. Inbound mail attempts for that target will fail.  \n" +
+			"**Investigate**: per-MX records table — `resolves=0` column identifies the offending target. Vacuously PASSes when the zone has no MX records (row A surfaces that case) or when the zone is Null MX (no targets to resolve by definition).",
+	},
+	{"C",
+		`(dnshealth_mx_cname_count{zone="$zone"} == bool 0) or on() vector(0)`,
+		"No MX target is a CNAME (RFC 2181 §10.3)",
+		"**Metric**: `dnshealth_mx_cname_count == 0`  \n" +
+			"**Why FAIL matters**: At least one MX target is an alias (CNAME), violating RFC 2181 §10.3. Many MTAs handle this inconsistently; some refuse delivery outright.  \n" +
+			"**Investigate**: per-MX records table — `is_cname=1` column identifies the offending target.",
+	},
+	{"D",
+		`clamp_max((dnshealth_mx_count{zone="$zone"} == bool 0) + on(zone) ((dnshealth_mx_count{zone="$zone"} > bool 0) * on(zone) (dnshealth_mx_count{zone="$zone"} == bool dnshealth_mx_syntax_valid_count{zone="$zone"})), 1) or on() vector(0)`,
+		"All MX target hostnames syntactically valid (LDH)",
+		"**Metric**: count comparison `dnshealth_mx_count` vs `dnshealth_mx_syntax_valid_count`, with vacuous PASS when no MX records exist for the zone (count==0)  \n" +
+			"**Why FAIL matters**: At least one MX target hostname has invalid syntax (underscore, leading/trailing hyphen, etc.) per RFC 952/1123. Some strict resolvers may reject.  \n" +
+			"**Investigate**: per-MX records table; the same LDH check is applied to NS hostnames in spec N6 — see that row for the validator details. Vacuously PASSes when the zone has no MX records — row A surfaces that case.",
+	},
+	{"E",
+		`((dnshealth_mx_has_null_mx_rr{zone="$zone"} == bool 0) or on(zone) (dnshealth_mx_count{zone="$zone"} == bool 1)) or on() vector(0)`,
+		"No conflict between Null MX and real MX records",
+		"**Metric**: derived from `dnshealth_mx_has_null_mx_rr` + `dnshealth_mx_count`  \n" +
+			"**Why FAIL matters**: Zone publishes a Null MX RR (`0 .`) AND additional MX records. RFC 7505 §3 requires Null MX to be the SOLE MX record; coexistence is undefined and likely interpreted differently by different MTAs.  \n" +
+			"**Investigate**: auth's zone file — remove either the Null MX RR (if you want to accept email) or the real MX records (if you don't). The distinction between `dnshealth_mx_null_mx` (canonical form only) and `dnshealth_mx_has_null_mx_rr` (any Null MX RR present, regardless of count) is what makes this row catchable — see spec 008 audit D-5.",
+	},
+}
+
+// mxStatusTable goes BELOW the existing records row, full-width
+// (24 grid units), positioned right before the per-MX records table.
+// Height 6 to comfortably fit 5 rows at CellHeight=Sm. The yOffset
+// shift the caller passes is applied via subY so the panel slides
+// up cleanly when the markdown info-panel header is absent (matches
+// the existing trio's behavior).
+func mxStatusTable(yOffset uint32) *table.PanelBuilder {
+	return statusTable("MX — status", gridPos(0, subY(22, yOffset), 24, 6), mxStatusChecks)
 }

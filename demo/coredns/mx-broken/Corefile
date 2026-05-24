@@ -1,0 +1,11 @@
+# Authoritative for mx-broken.demo. — broken email setup
+# demonstrating the MX prober's failure detection (spec 008 US1).
+# Two MX records: priority 10 = CNAMEd target (RFC 2181 §10.3
+# violation), priority 20 = unresolvable target. Dashboard rows
+# B (resolves) and C (no CNAMEs) read FAIL.
+
+mx-broken.demo. {
+    file /zones/mx-broken.demo.zone
+    log
+    errors
+}

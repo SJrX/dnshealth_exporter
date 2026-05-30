@@ -157,7 +157,7 @@
       "type": "table",
       "targets": [
         {
-          "expr": "(2 * vector(0)) + (3 * ((1 - vector(0)) * (clamp_max(max((count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"})) \u003e= bool 2) or on() vector(0)), 1) or vector(0)) * (clamp_max(max(count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"})) == bool 2), 1) or vector(0)))) + (1 * ((1 - vector(0)) * (clamp_max(max((count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"})) \u003e= bool 2) or on() vector(0)), 1) or vector(0)) * (1 - (clamp_max(max(count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"})) == bool 2), 1) or vector(0)))))",
+          "expr": "(2 * vector(0)) + ((1 - vector(0)) * (clamp_max(max((count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"})) \u003e= bool 2) or on() vector(0)), 1) or vector(0)) * (1 + (2 * (clamp_max(max(count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check=\"soa\",zone=\"$zone\"})) == bool 2), 1) or vector(0)))))",
           "instant": true,
           "range": false,
           "legendFormat": "Multiple authoritative nameservers (\u003e=2)",
@@ -962,35 +962,35 @@
           "type": "table",
           "targets": [
             {
-              "expr": "(2 * vector(0)) + (3 * ((1 - vector(0)) * (clamp_max(max(((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) or on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1)) or on() vector(0)), 1) or vector(0)) * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool 1) * on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 0)), 1) or vector(0)))) + (1 * ((1 - vector(0)) * (clamp_max(max(((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) or on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1)) or on() vector(0)), 1) or vector(0)) * (1 - (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool 1) * on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 0)), 1) or vector(0)))))",
+              "expr": "(2 * vector(0)) + ((1 - vector(0)) * (clamp_max(max(((dnshealth_mx_count{zone=\"$zone\"} \u003e bool 0) or on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1)) or on() vector(0)), 1) or vector(0)) * (1 + (2 * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool 1) * on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 0)), 1) or vector(0)))))",
               "instant": true,
               "range": false,
               "legendFormat": "Zone has MX records (or Null MX intentionally set)",
               "refId": "A"
             },
             {
-              "expr": "(2 * (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) + (3 * ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_resolved_count{zone=\"$zone\"}) or on() vector(0)), 1) or vector(0)) * vector(0))) + (1 * ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_resolved_count{zone=\"$zone\"}) or on() vector(0)), 1) or vector(0)) * (1 - vector(0))))",
+              "expr": "(2 * (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) + ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_resolved_count{zone=\"$zone\"}) or on() vector(0)), 1) or vector(0)) * (1 + (2 * vector(0))))",
               "instant": true,
               "range": false,
               "legendFormat": "All MX targets resolve",
               "refId": "B"
             },
             {
-              "expr": "(2 * (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) + (3 * ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_cname_count{zone=\"$zone\"} == bool 0) or on() vector(0)), 1) or vector(0)) * vector(0))) + (1 * ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_cname_count{zone=\"$zone\"} == bool 0) or on() vector(0)), 1) or vector(0)) * (1 - vector(0))))",
+              "expr": "(2 * (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) + ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_cname_count{zone=\"$zone\"} == bool 0) or on() vector(0)), 1) or vector(0)) * (1 + (2 * vector(0))))",
               "instant": true,
               "range": false,
               "legendFormat": "No MX target is a CNAME (RFC 2181 §10.3)",
               "refId": "C"
             },
             {
-              "expr": "(2 * (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) + (3 * ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_syntax_valid_count{zone=\"$zone\"}) or on() vector(0)), 1) or vector(0)) * vector(0))) + (1 * ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_syntax_valid_count{zone=\"$zone\"}) or on() vector(0)), 1) or vector(0)) * (1 - vector(0))))",
+              "expr": "(2 * (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) + ((1 - (clamp_max(max(clamp_max((dnshealth_mx_count{zone=\"$zone\"} == bool 0) + on(zone) (dnshealth_mx_null_mx{zone=\"$zone\"} == bool 1), 1)), 1) or vector(0))) * (clamp_max(max((dnshealth_mx_count{zone=\"$zone\"} == bool dnshealth_mx_syntax_valid_count{zone=\"$zone\"}) or on() vector(0)), 1) or vector(0)) * (1 + (2 * vector(0))))",
               "instant": true,
               "range": false,
               "legendFormat": "All MX target hostnames syntactically valid (LDH)",
               "refId": "D"
             },
             {
-              "expr": "1 - clamp_max((dnshealth_mx_has_null_mx_rr{zone=\"$zone\"} == bool 1) * on(zone) (dnshealth_mx_count{zone=\"$zone\"} \u003e bool 1), 1)",
+              "expr": "(1 - clamp_max((dnshealth_mx_has_null_mx_rr{zone=\"$zone\"} == bool 1) * on(zone) (dnshealth_mx_count{zone=\"$zone\"} \u003e bool 1), 1)) or on() vector(0)",
               "instant": true,
               "range": false,
               "legendFormat": "No conflict between Null MX and real MX records",

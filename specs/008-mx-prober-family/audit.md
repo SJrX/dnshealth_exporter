@@ -248,3 +248,53 @@ None found:
 **Implementation matches spec.** All 12 FRs, all 8 SCs (SC-008 amended per analyze U1), all 8 Constitution principles verified. Three minor deviations (D-1, D-2, D-3) are design-record items, not defects. /speckit-analyze C1 caught a HIGH-severity dashboard-PromQL bug at spec time, applied before code.
 
 Ready for PR submission.
+
+### D-9: Row E `or`-short-circuit bug (found during the four-state dashboard work)
+
+**When**: discovered after spec 008 merged, while implementing the
+four-state (FAIL/PASS/N/A/WARN) status convention (constitution
+Principle IX). That work added a live PromQL evaluation step — querying
+Prometheus's `/api/v1/query` with each *generated* row predicate per
+demo zone — the verification spec 008's smoke never did.
+
+**Bug**: Row E's predicate was
+`((mx_has_null_mx_rr == bool 0) or on(zone) (mx_count == bool 1)) or on() vector(0)`.
+Both `== bool` comparisons yield a **present** series (value 0 or 1)
+for every configured zone, and PromQL's `or` returns its left operand
+whenever that operand exists — so the expression collapsed to just
+`(mx_has_null_mx_rr == bool 0)` and the `count == 1` branch never
+fired. For the canonical Null MX zone (`mx-null.demo.`:
+has_null_mx_rr=1, count=1) the row evaluated to **FAIL** when it should
+read **PASS** (a single `0 .` is the correct, non-conflicting form).
+The conflict case it was meant to catch still FAILed, so the row looked
+plausible — but the healthy Null MX zone was a false alarm.
+
+**Why spec 008 missed it**: smoke assertion A4i only greps the raw
+metric (`dnshealth_mx_null_mx == 1`); it never evaluated row E's
+PromQL. The original audit explicitly marked row E "operator-eyeball in
+Grafana" / SC-004 integration-only. This is exactly the coverage gap
+issue #46 (dashboard PromQL evaluation in smoke) describes — the new
+four-state verification step is a manual instance of it.
+
+**Fix**: rewrote row E as
+`1 - clamp_max((mx_has_null_mx_rr == bool 1) * on(zone) (mx_count > bool 1), 1)`
+— FAIL iff a Null MX RR coexists with other MX RRs, PASS otherwise.
+Multiplication + `clamp_max` instead of `or`, the same idiom the D-4
+fix established for row B. The shared `mxNoRealTargets` N/A predicate
+(new in the four-state work) had the identical `or` trap and got the
+same treatment. Both verified live across all demo zones (mx-null,
+mx-healthy, mx-broken, and the no-MX zones) before commit:
+
+| predicate | mx-null | no-MX (healthy) | mx-healthy |
+|---|---|---|---|
+| `mxNoRealTargets` (buggy `or`) | 0 | — | — |
+| `mxNoRealTargets` (fixed clamp_max+sum) | 1 (N/A) | 1 (N/A) | 0 (applies) |
+| row E (buggy `or`) | 0 (FAIL) | — | — |
+| row E (fixed) | 1 (PASS) | — | — |
+
+**Same family as**: D-4 (the `or`-short-circuit on rows B/D, caught
+pre-merge by the user). Row E shipped with the bug because, unlike B/D,
+no one evaluated its predicate against a running Prometheus until now.
+Strong evidence for prioritizing issue #46 Tier 1 (dashboard PromQL
+evaluation in smoke).
+

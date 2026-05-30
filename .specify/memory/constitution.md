@@ -1,18 +1,20 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.1.0 → 1.1.1 (PATCH — wording clarification)
+  Version change: 1.1.1 → 1.2.0 (MINOR — new principle added)
 
-  Rationale: Post-implementation analysis found Principle VIII
-  referenced "Docker-based CoreDNS" and outdated testutil API
-  names (WriteZone, ZoneFile). Updated to reflect actual
-  implementation: "real DNS queries" and current API (Server,
-  ReferralServer, ServerWithOptions).
+  Rationale: Two cross-cutting dashboard conventions had been
+  applied ad hoc across specs 005-008 without being recorded
+  anywhere speckit consults — "every new metric ships with
+  dashboard wiring" and the status-row state semantics. Codifying
+  them as Principle IX so /speckit-plan and /speckit-analyze factor
+  them in automatically when future specs add metrics or dashboard
+  rows. Triggered by the four-state (FAIL/PASS/N/A/WARN) status
+  convention introduced for the MX panel.
 
-  Modified principles:
-    - VIII. Readable, Honest Tests: "Docker-based CoreDNS" →
-      "real DNS queries"; testutil API references updated
-  Added sections: None
+  Modified principles: None
+  Added sections:
+    - IX. Dashboard Surfacing & Conventions (new principle)
   Removed sections: None
   Templates requiring updates: None
   Follow-up TODOs: None
@@ -187,6 +189,43 @@ the test it is important that it is NOT in the test.
 - If a reader cannot understand a test without opening another
   file, the test is wrong.
 
+### IX. Dashboard Surfacing & Conventions
+
+Metrics that no dashboard surfaces are invisible in practice. A
+feature is not complete until its signals are reachable by an
+operator looking at Grafana, and the dashboard MUST present those
+signals using consistent, predictable conventions.
+
+- Every new `dnshealth_*` metric family MUST ship with Grafana
+  wiring in the same change that introduces it — a status row, a
+  records-table column, a timeseries, or an explicit, documented
+  decision that it is operator-query-only. Unsurfaced metrics are
+  treated as incomplete work, not a follow-up.
+- Status-table rows MUST use the four-state value convention,
+  color-mapped consistently across every panel:
+  - `0` → FAIL (red) — the checked condition is violated.
+  - `1` → PASS (green) — the checked condition holds.
+  - `2` → N/A (gray) — the check does not apply to this zone
+    (e.g., "all MX targets resolve" on a zone with no MX records
+    or an RFC 7505 Null MX declaration). N/A is the honest signal
+    that a check did not run; it MUST NOT be rendered as a PASS.
+  - `3` → WARN (yellow) — the hard check passes but a soft concern
+    applies (e.g., a zone with exactly two nameservers meets the
+    minimum but RFC 2182 recommends more).
+  - Priority when more than one could apply is N/A > FAIL > WARN >
+    PASS. New states beyond these four MUST NOT be invented; extend
+    this convention instead.
+- The threshold logic that decides FAIL/PASS/N/A/WARN lives in the
+  dashboard (PromQL predicates), NOT in the exporter — consistent
+  with Principle V (the exporter emits raw, granular metrics and no
+  pass/fail verdicts).
+- Every status row MUST carry human-readable detail text explaining
+  the metric, what each non-PASS state means, and where to look
+  next. A guard test MUST reject rows missing detail.
+- Dashboards MUST be generated from code (the Grafana Foundation
+  SDK builders), and a drift test MUST verify the committed JSON
+  matches the generator output.
+
 ## Technology Stack
 
 - **Language**: Go (latest two stable release series)
@@ -236,4 +275,4 @@ the test it is important that it is NOT in the test.
   documentation accuracy, and identifies dead code, stale
   references, and semantic errors in metrics or counters.
 
-**Version**: 1.1.1 | **Ratified**: 2026-04-21 | **Last Amended**: 2026-04-21
+**Version**: 1.2.0 | **Ratified**: 2026-04-21 | **Last Amended**: 2026-05-30

@@ -60,9 +60,16 @@ func scalarizeStatusPredicate(p string) string {
 
 // composeStatusExpr folds a check's hard / na / warn predicates into the
 // single 0/1/2/3 expression the Result cell renders. Priority is
-// N/A > FAIL > WARN > PASS, encoded as a sum of mutually-exclusive terms:
+// N/A > FAIL > WARN > PASS, encoded as:
 //
-//	value = 2·na + 3·((1-na)·hard·warn) + 1·((1-na)·hard·(1-warn))
+//	value = 2·na + (1-na)·hard·(1 + 2·warn)
+//
+// Truth table (na, hard, warn each 0/1):
+//
+//	na=1                     → 2          (N/A — wins; the (1-na) factor zeroes the rest)
+//	na=0, hard=0             → 0          (FAIL)
+//	na=0, hard=1, warn=0     → 1          (PASS)
+//	na=0, hard=1, warn=1     → 1+2 = 3    (WARN)
 //
 // Each sub-predicate is scalarized to a label-less 0/1 first, so the
 // arithmetic always matches and always produces a value (no empty
@@ -81,9 +88,7 @@ func composeStatusExpr(c statusCheck) string {
 	if c.warnExpr != "" {
 		warn = scalarizeStatusPredicate(c.warnExpr)
 	}
-	return "(2 * " + na + ")" +
-		" + (3 * ((1 - " + na + ") * " + hard + " * " + warn + "))" +
-		" + (1 * ((1 - " + na + ") * " + hard + " * (1 - " + warn + ")))"
+	return "(2 * " + na + ") + ((1 - " + na + ") * " + hard + " * (1 + (2 * " + warn + ")))"
 }
 
 // buildStatusPanelDescription assembles each check's detail into a
@@ -172,6 +177,12 @@ var parentStatusChecks = []statusCheck{
 	},
 }
 
+// nsCount is the per-zone distinct-nameserver count, shared by NS row A's
+// hard (`>= 2`) and warn (`== 2`) predicates so the FAIL threshold and the
+// WARN threshold can't silently drift apart (mirrors mxNoRealTargets). A
+// change to how nameservers are counted now lives in exactly one place.
+var nsCount = `count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check="soa",zone="$zone"}))`
+
 var nsStatusChecks = []statusCheck{
 	// WARN at exactly 2 nameservers: two is the bare minimum (one NS
 	// is a single point of failure, RFC 2182), but RFC 2182 §5
@@ -179,8 +190,8 @@ var nsStatusChecks = []statusCheck{
 	// 3+ → PASS.
 	{
 		refId:        "A",
-		expr:         `(count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check="soa",zone="$zone"})) >= bool 2) or on() vector(0)`,
-		warnExpr:     `count by (zone) (count by (zone, nameserver) (dnshealth_query_success{check="soa",zone="$zone"})) == bool 2`,
+		expr:         `(` + nsCount + ` >= bool 2) or on() vector(0)`,
+		warnExpr:     nsCount + ` == bool 2`,
 		legendFormat: "Multiple authoritative nameservers (>=2)",
 		detail: "**Metric**: distinct (zone, nameserver) tuples in `dnshealth_query_success{check=\"soa\"}`  \n" +
 			"**Why FAIL matters**: A single NS is a single point of failure (RFC 2182). One outage = the whole zone goes dark.  \n" +
@@ -370,7 +381,15 @@ var mxStatusChecks = []statusCheck{
 		// returned FAIL for the legitimate canonical Null MX zone
 		// (count==1). Caught by live PromQL evaluation post-reboot;
 		// smoke never exercised this predicate (issue #46).
-		expr:         `1 - clamp_max((dnshealth_mx_has_null_mx_rr{zone="$zone"} == bool 1) * on(zone) (dnshealth_mx_count{zone="$zone"} > bool 1), 1)`,
+		//
+		// Trailing `or on() vector(0)`: this row is binary (no
+		// naExpr/warnExpr) so composeStatusExpr returns it verbatim and
+		// does NOT scalarize it. Without the fallback, absent series
+		// (cold start before the first cycle, or a zone removed from
+		// config) make `1 - <empty>` evaluate to empty → the row renders
+		// blank instead of a value. Every other binary row carries the
+		// same tail.
+		expr:         `(1 - clamp_max((dnshealth_mx_has_null_mx_rr{zone="$zone"} == bool 1) * on(zone) (dnshealth_mx_count{zone="$zone"} > bool 1), 1)) or on() vector(0)`,
 		legendFormat: "No conflict between Null MX and real MX records",
 		detail: "**Metric**: derived from `dnshealth_mx_has_null_mx_rr` + `dnshealth_mx_count`  \n" +
 			"**Why FAIL matters**: Zone publishes a Null MX RR (`0 .`) AND additional MX records. RFC 7505 §3 requires Null MX to be the SOLE MX record; coexistence is undefined and likely interpreted differently by different MTAs.  \n" +

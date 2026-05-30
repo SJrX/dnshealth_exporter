@@ -1,5 +1,3 @@
-//go:build integration
-
 package main
 
 import (
@@ -17,8 +15,13 @@ import (
 // by hand, or edited the typed source without re-running `make
 // dashboards`. Either way the fix is the same: regenerate.
 //
-// Built only under -tags=integration to keep it out of the default
-// unit test pass (matches the project convention; see CLAUDE.md).
+// Runs in the DEFAULT (non-integration) build: it only reads committed
+// files and runs the in-process generator — no DNS, network, or Docker
+// — so a contributor who edits a panel and runs `go test ./...` gets
+// instant drift feedback rather than discovering stale JSON minutes
+// later in CI (issue #50). Most tests in this repo are integration-
+// tagged because they hit real DNS; this one has no such dependency,
+// so the tag was incidental, not warranted.
 func TestDashboardJSONMatchesGenerator(t *testing.T) {
 	// Fixture Setup — locate repo root via the test file's own path,
 	// then enumerate the (variant, committedPath) cases. The drift

@@ -57,3 +57,52 @@ func itoa(n int) string {
 	}
 	return string(b)
 }
+
+// TestComposeStatusExpr guards the four-state composition contract
+// (constitution Principle IX):
+//
+//   - a check with only `expr` compiles to that expr verbatim, so
+//     existing PASS/FAIL rows produce byte-identical dashboard JSON;
+//   - a check that sets naExpr or warnExpr is rewritten and still
+//     references each sub-predicate, so the 0/1/2/3 arithmetic is
+//     actually wired up;
+//   - every real status check composes to a non-empty expression
+//     (an empty target Expr renders a blank, dataless row).
+//
+// It does NOT evaluate the PromQL against Prometheus (that needs a
+// live stack — see issue #46); it guards the string layer only.
+func TestComposeStatusExpr(t *testing.T) {
+	// A pass/fail-only row must be returned unchanged.
+	plain := statusCheck{refId: "A", expr: "dnshealth_x == bool 1"}
+	if got := composeStatusExpr(plain); got != plain.expr {
+		t.Errorf("plain check: composeStatusExpr altered a pass/fail-only row\n got: %s\nwant: %s", got, plain.expr)
+	}
+
+	// A row with naExpr/warnExpr must be rewritten and mention each
+	// sub-predicate.
+	rich := statusCheck{refId: "B", expr: "HARDP", naExpr: "NAP", warnExpr: "WARNP"}
+	got := composeStatusExpr(rich)
+	if got == rich.expr {
+		t.Fatalf("rich check: composeStatusExpr returned expr unchanged despite na/warn being set")
+	}
+	for _, sub := range []string{"HARDP", "NAP", "WARNP"} {
+		if !strings.Contains(got, sub) {
+			t.Errorf("rich check: composed expr is missing sub-predicate %q\n composed: %s", sub, got)
+		}
+	}
+
+	// Every real status check must compose to a non-empty expression.
+	lists := map[string][]statusCheck{
+		"parentStatusChecks": parentStatusChecks,
+		"nsStatusChecks":     nsStatusChecks,
+		"soaStatusChecks":    soaStatusChecks,
+		"mxStatusChecks":     mxStatusChecks,
+	}
+	for name, checks := range lists {
+		for i, c := range checks {
+			if strings.TrimSpace(composeStatusExpr(c)) == "" {
+				t.Errorf("%s[%d] %q: composed to an empty expression", name, i, c.legendFormat)
+			}
+		}
+	}
+}

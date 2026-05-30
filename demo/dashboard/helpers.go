@@ -27,9 +27,11 @@ func subY(base, off uint32) uint32 {
 	return base - off
 }
 
-// passFailMappings is the standard 0/1 → FAIL/PASS color mapping used by
-// every "status" table in the v1 dashboard. Wrapped in a single-element
-// list because that's the shape Grafana's `mappings` field expects.
+// passFailMappings is the original 0/1 → FAIL/PASS color mapping.
+// Superseded on status tables by statusMappings (the four-state
+// convention) but kept for any binary-only consumer. Wrapped in a
+// single-element list because that's the shape Grafana's `mappings`
+// field expects.
 func passFailMappings() []any {
 	return []any{
 		map[string]any{
@@ -37,6 +39,32 @@ func passFailMappings() []any {
 			"options": map[string]any{
 				"0": map[string]any{"text": "FAIL", "color": "red", "index": 0},
 				"1": map[string]any{"text": "PASS", "color": "green", "index": 1},
+			},
+		},
+	}
+}
+
+// statusMappings is the canonical four-state color mapping for every
+// "status" table Result cell (constitution Principle IX):
+//
+//	0 → FAIL  (red)
+//	1 → PASS  (green)
+//	2 → N/A   (gray)    — check does not apply to this zone
+//	3 → WARN  (yellow)  — passes the hard check but a soft concern applies
+//
+// Rows that only ever emit 0/1 render identically to the old two-state
+// mapping — the 2/3 entries are inert for them. The composition lives
+// in composeStatusExpr (panels_status.go); this is purely the display
+// side. "text" is Grafana's neutral gray, distinct from a real PASS/FAIL.
+func statusMappings() []any {
+	return []any{
+		map[string]any{
+			"type": "value",
+			"options": map[string]any{
+				"0": map[string]any{"text": "FAIL", "color": "red", "index": 0},
+				"1": map[string]any{"text": "PASS", "color": "green", "index": 1},
+				"2": map[string]any{"text": "N/A", "color": "text", "index": 2},
+				"3": map[string]any{"text": "WARN", "color": "yellow", "index": 3},
 			},
 		},
 	}

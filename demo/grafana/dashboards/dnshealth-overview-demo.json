@@ -57,7 +57,7 @@
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 8,
         "x": 0,
         "y": 4
@@ -214,7 +214,7 @@
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 8,
         "x": 8,
         "y": 4
@@ -343,7 +343,7 @@
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 8,
         "x": 16,
         "y": 4
@@ -461,7 +461,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 12
+        "y": 14
       },
       "repeatDirection": "h",
       "transformations": [
@@ -569,7 +569,7 @@
         "h": 10,
         "w": 8,
         "x": 8,
-        "y": 12
+        "y": 14
       },
       "repeatDirection": "h",
       "transformations": [
@@ -678,6 +678,17 @@
                       }
                     },
                     "type": "value"
+                  },
+                  {
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "color": "text",
+                        "index": 2,
+                        "text": "n/a"
+                      }
+                    },
+                    "type": "special"
                   }
                 ]
               },
@@ -717,6 +728,17 @@
                       }
                     },
                     "type": "value"
+                  },
+                  {
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "color": "text",
+                        "index": 2,
+                        "text": "n/a"
+                      }
+                    },
+                    "type": "special"
                   }
                 ]
               },
@@ -798,7 +820,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 12
+        "y": 14
       },
       "repeatDirection": "h",
       "transformations": [
@@ -954,7 +976,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 24
       },
       "id": 0,
       "panels": [
@@ -1008,7 +1030,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 23
+            "y": 25
           },
           "repeatDirection": "h",
           "transformations": [
@@ -1151,7 +1173,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 23
+            "y": 25
           },
           "repeatDirection": "h",
           "transformations": [
@@ -1281,6 +1303,17 @@
                           }
                         },
                         "type": "value"
+                      },
+                      {
+                        "options": {
+                          "match": "null",
+                          "result": {
+                            "color": "text",
+                            "index": 2,
+                            "text": "n/a"
+                          }
+                        },
+                        "type": "special"
                       }
                     ]
                   },
@@ -1320,6 +1353,17 @@
                           }
                         },
                         "type": "value"
+                      },
+                      {
+                        "options": {
+                          "match": "null",
+                          "result": {
+                            "color": "text",
+                            "index": 2,
+                            "text": "n/a"
+                          }
+                        },
+                        "type": "special"
                       }
                     ]
                   },
@@ -1359,6 +1403,17 @@
                           }
                         },
                         "type": "value"
+                      },
+                      {
+                        "options": {
+                          "match": "null",
+                          "result": {
+                            "color": "text",
+                            "index": 2,
+                            "text": "n/a"
+                          }
+                        },
+                        "type": "special"
                       }
                     ]
                   },
@@ -1427,7 +1482,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 35
       },
       "id": 0,
       "panels": [
@@ -1451,7 +1506,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 34
+            "y": 36
           },
           "repeatDirection": "h",
           "options": {
@@ -1501,7 +1556,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 34
+            "y": 36
           },
           "repeatDirection": "h",
           "options": {
@@ -1564,7 +1619,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 42
+            "y": 44
           },
           "repeatDirection": "h",
           "options": {
@@ -1614,7 +1669,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 42
+            "y": 44
           },
           "repeatDirection": "h",
           "options": {

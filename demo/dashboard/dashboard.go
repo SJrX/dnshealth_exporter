@@ -60,7 +60,7 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 	// focused on parent/NS/SOA health and reclaim screen space.
 	b = b.WithRow(dashboard.NewRowBuilder("MX — email health").
 		Collapsed(false).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(22, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(24, yOffset), W: 24, H: 1}).
 		WithPanel(mxStatusTable(yOffset)).
 		WithPanel(mxRecordsTable(yOffset)))
 
@@ -70,7 +70,7 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 	// (10 grid units + 1 for the row header).
 	b = b.WithRow(dashboard.NewRowBuilder("Operator / debug views").
 		Collapsed(true).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(33, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(35, yOffset), W: 24, H: 1}).
 		WithPanel(probeCycleDurationTimeseries(yOffset)).
 		WithPanel(dnsQueryRateTimeseries(yOffset)).
 		WithPanel(soaSerialsTimeseries(yOffset)).

@@ -297,15 +297,15 @@ var soaStatusChecks = []statusCheck{
 }
 
 func parentStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("Parent — status", gridPos(0, subY(4, yOffset), 8, 8), parentStatusChecks)
+	return statusTable("Parent — status", gridPos(0, subY(4, yOffset), 8, 10), parentStatusChecks)
 }
 
 func nsStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("NS — status", gridPos(8, subY(4, yOffset), 8, 8), nsStatusChecks)
+	return statusTable("NS — status", gridPos(8, subY(4, yOffset), 8, 10), nsStatusChecks)
 }
 
 func soaStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("SOA — status", gridPos(16, subY(4, yOffset), 8, 8), soaStatusChecks)
+	return statusTable("SOA — status", gridPos(16, subY(4, yOffset), 8, 10), soaStatusChecks)
 }
 
 // MX status checks (spec 008). Rows B/C/D use the four-state convention
@@ -404,5 +404,5 @@ var mxStatusChecks = []statusCheck{
 // Y=22 (header) + Y=23 (panels). yOffset shifts the section up
 // cleanly when the markdown info-panel header is absent.
 func mxStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("MX — status", gridPos(0, subY(23, yOffset), 12, 10), mxStatusChecks)
+	return statusTable("MX — status", gridPos(0, subY(25, yOffset), 12, 10), mxStatusChecks)
 }

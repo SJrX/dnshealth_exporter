@@ -77,6 +77,30 @@ To see the patterns visually: switch the dashboard's `$zone`
 variable between `healthy.demo.` (dual-stack) and `v6-only.demo.`
 (IPv6-only) and watch the **NS records** tables change shape.
 
+## Inspecting live state
+
+`promql.sh` is a thin wrapper for poking at the running stack's Prometheus
+without hand-rolling `curl` + URL-encoding each time. It needs the stack
+up (`docker compose up -d --build`).
+
+```sh
+# List the configured demo zones.
+demo/promql.sh zones
+
+# Run an instant query; prints one line per result series.
+demo/promql.sh query 'dnshealth_mx_count'
+demo/promql.sh query 'dnshealth_soa_serial{zone="soa-serial-mismatch.demo."}'
+
+# Evaluate a dashboard status-row predicate (the four-state form
+# composeStatusExpr emits) and print FAIL/PASS/N/A/WARN per zone.
+# $zone is substituted; with no zones given, every configured zone is used.
+demo/promql.sh state '<predicate with $zone>' [zone ...]
+```
+
+The committed `promql_live` Go test (`dashboard/promql_live_test.go`) is the
+authoritative regression gate for dashboard predicates; `promql.sh` is for
+eyeballing live state while iterating.
+
 ## Override host ports
 
 The demo defaults:

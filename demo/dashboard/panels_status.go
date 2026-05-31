@@ -266,32 +266,62 @@ var nsStatusChecks = []statusCheck{
 	},
 }
 
+// soaNoData is the shared N/A predicate for the SOA rows: 1 when the
+// zone produced no SOA data this cycle (every NS failed to answer SOA,
+// so the prober emits no dnshealth_soa_* series — e.g. lame-nameserver.
+// demo. / missing-glue.demo.). Without this the rows fall through their
+// `or vector(0)` tail to 0 = FAIL, falsely reporting an MNAME problem
+// when the truth is "couldn't ask" (issue #49 / spec 008 audit D-9).
+//
+// absent() yields a 1-valued series exactly when the selector matches
+// nothing, and empty when it matches — which scalarizeStatusPredicate
+// turns into the 1/0 the four-state arithmetic needs. (A `count(...) ==
+// bool 0` form does NOT work: with no series, count is empty, == bool 0
+// is empty, and the N/A branch never fires — the same empty-vector trap
+// as audit D-4.)
+var soaNoData = `absent(dnshealth_soa_serial{zone="$zone"})`
+
 var soaStatusChecks = []statusCheck{
 	{
 		refId:        "A",
 		expr:         `((max by (zone) (dnshealth_soa_serial{zone="$zone"}) - min by (zone) (dnshealth_soa_serial{zone="$zone"})) == bool 0) and on(zone) (count by (zone) (dnshealth_soa_serial{zone="$zone"}) > bool 0) or on() vector(0)`,
+		naExpr:       soaNoData,
 		legendFormat: "All NSs report same SOA serial",
 		detail: "**Metric**: `max(dnshealth_soa_serial) - min(dnshealth_soa_serial) == 0`  \n" +
 			"**Why FAIL matters**: Secondaries haven't pulled the latest zone — resolvers may serve stale data depending on which NS they hit.  \n" +
+			"**N/A**: no NS answered the SOA query this cycle — there are no serials to compare.  \n" +
 			"**Investigate**: SOA per-nameserver table below — find the NS reporting an out-of-date serial.",
 	},
-	// MNAME validity (proposals S1). min-aggregation: PASS
-	// only if every NS reports a MNAME that is in the NS set
-	// and resolves; a single dissenting NS fails the row.
+	// MNAME validity (proposals S1). MNAME-in-set is checked with a
+	// soft (WARN) verdict rather than FAIL: an MNAME outside the NS
+	// set is a legitimate, common hidden-master pattern (NOTIFY-driven
+	// primary deliberately kept out of the public NS set), not an
+	// error — so it warrants "verify intent", not red. Row C still
+	// hard-FAILs if the MNAME doesn't resolve, which is genuinely
+	// broken NOTIFY. (issue #49)
 	{
-		refId:        "B",
-		expr:         `min by (zone) (dnshealth_soa_mname_in_ns_set{zone="$zone"}) or on() vector(0)`,
+		refId: "B",
+		// hard = "we have SOA data to evaluate" — this row never hard-
+		// FAILs; its only adverse state is the WARN below. N/A (no data)
+		// is handled by naExpr; PASS = MNAME in set; WARN = MNAME not in
+		// set.
+		expr:         `(count by (zone) (dnshealth_soa_serial{zone="$zone"}) >= bool 1) or on() vector(0)`,
+		warnExpr:     `min by (zone) (dnshealth_soa_mname_in_ns_set{zone="$zone"}) == bool 0`,
+		naExpr:       soaNoData,
 		legendFormat: "SOA MNAME is in zone's NS RR set",
 		detail: "**Metric**: `min(dnshealth_soa_mname_in_ns_set)`  \n" +
-			"**Why FAIL matters**: The MNAME identifies the primary master. If it's outside the NS set, NOTIFY may target the wrong server (hidden-master setups legitimately read 0 here — verify intent before alerting).  \n" +
+			"**WARN (not FAIL) matters**: The MNAME identifies the primary master. An MNAME outside the NS set is RFC-allowed and normal for hidden-master setups (NOTIFY-driven primary not in the public NS set) — so this is a soft 'verify intent' warning, not an error. If it's unintentional, NOTIFY may target the wrong server.  \n" +
+			"**N/A**: no NS answered the SOA query this cycle.  \n" +
 			"**Investigate**: SOA per-nameserver table — each row's `mname` label vs. the NS records tables.",
 	},
 	{
 		refId:        "C",
 		expr:         `min by (zone) (dnshealth_soa_mname_resolves{zone="$zone"}) or on() vector(0)`,
+		naExpr:       soaNoData,
 		legendFormat: "SOA MNAME hostname resolves to A or AAAA",
 		detail: "**Metric**: `min(dnshealth_soa_mname_resolves)`  \n" +
 			"**Why FAIL matters**: NOTIFY and dynamic updates target the MNAME hostname; if it doesn't resolve, both mechanisms break silently.  \n" +
+			"**N/A**: no NS answered the SOA query this cycle — there is no MNAME to resolve.  \n" +
 			"**Investigate**: SOA per-nameserver table shows the `mname` label — try resolving that hostname externally.",
 	},
 }

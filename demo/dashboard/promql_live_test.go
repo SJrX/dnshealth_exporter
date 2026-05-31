@@ -122,6 +122,34 @@ var expectations = map[string]string{
 	// WARN states from #48: a zone with exactly two nameservers meets the
 	// RFC 2182 minimum but warrants a soft warning.
 	"ns/A/healthy.demo.": "WARN",
+
+	// SOA rows (#49): N/A for zones that produced no SOA data this cycle;
+	// WARN (not FAIL) when the MNAME is outside the parent-advertised NS
+	// set (a legitimate hidden-master pattern); FAIL only for a genuine
+	// serial divergence.
+	//
+	// healthy.demo. — full SOA, MNAME in set, serials agree.
+	"soa/A/healthy.demo.": "PASS",
+	"soa/B/healthy.demo.": "PASS",
+	"soa/C/healthy.demo.": "PASS",
+	// lame-nameserver.demo. + missing-glue.demo. — no NS answers SOA, so
+	// every SOA row reads N/A rather than a false FAIL (the bug #49 fixes).
+	"soa/A/lame-nameserver.demo.": "N/A",
+	"soa/B/lame-nameserver.demo.": "N/A",
+	"soa/C/lame-nameserver.demo.": "N/A",
+	"soa/A/missing-glue.demo.":    "N/A",
+	"soa/B/missing-glue.demo.":    "N/A",
+	"soa/C/missing-glue.demo.":    "N/A",
+	// soa-serial-mismatch.demo. — serials 100 vs 101 → row A genuinely
+	// FAILs; MNAME is in set and resolves so B/C PASS.
+	"soa/A/soa-serial-mismatch.demo.": "FAIL",
+	"soa/B/soa-serial-mismatch.demo.": "PASS",
+	// ns-mismatch.demo. — parent advertises ns1 but the SOA MNAME
+	// (ns-internal-a) is outside that parent-advertised set → row B WARNs,
+	// not FAILs. Single-NS serial is trivially consistent → row A PASS.
+	"soa/A/ns-mismatch.demo.": "PASS",
+	"soa/B/ns-mismatch.demo.": "WARN",
+	"soa/C/ns-mismatch.demo.": "PASS",
 }
 
 // TestDashboardPromQLPredicates is the live PromQL evaluation gate.

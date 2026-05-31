@@ -298,21 +298,21 @@
       "type": "table",
       "targets": [
         {
-          "expr": "((max by (zone) (dnshealth_soa_serial{zone=\"$zone\"}) - min by (zone) (dnshealth_soa_serial{zone=\"$zone\"})) == bool 0) and on(zone) (count by (zone) (dnshealth_soa_serial{zone=\"$zone\"}) \u003e bool 0) or on() vector(0)",
+          "expr": "(2 * (clamp_max(max(absent(dnshealth_soa_serial{zone=\"$zone\"})), 1) or vector(0))) + ((1 - (clamp_max(max(absent(dnshealth_soa_serial{zone=\"$zone\"})), 1) or vector(0))) * (clamp_max(max(((max by (zone) (dnshealth_soa_serial{zone=\"$zone\"}) - min by (zone) (dnshealth_soa_serial{zone=\"$zone\"})) == bool 0) and on(zone) (count by (zone) (dnshealth_soa_serial{zone=\"$zone\"}) \u003e bool 0) or on() vector(0)), 1) or vector(0)) * (1 + (2 * vector(0))))",
           "instant": true,
           "range": false,
           "legendFormat": "All NSs report same SOA serial",
           "refId": "A"
         },
         {
-          "expr": "min by (zone) (dnshealth_soa_mname_in_ns_set{zone=\"$zone\"}) or on() vector(0)",
+          "expr": "(2 * (clamp_max(max(absent(dnshealth_soa_serial{zone=\"$zone\"})), 1) or vector(0))) + ((1 - (clamp_max(max(absent(dnshealth_soa_serial{zone=\"$zone\"})), 1) or vector(0))) * (clamp_max(max((count by (zone) (dnshealth_soa_serial{zone=\"$zone\"}) \u003e= bool 1) or on() vector(0)), 1) or vector(0)) * (1 + (2 * (clamp_max(max(min by (zone) (dnshealth_soa_mname_in_ns_set{zone=\"$zone\"}) == bool 0), 1) or vector(0)))))",
           "instant": true,
           "range": false,
           "legendFormat": "SOA MNAME is in zone's NS RR set",
           "refId": "B"
         },
         {
-          "expr": "min by (zone) (dnshealth_soa_mname_resolves{zone=\"$zone\"}) or on() vector(0)",
+          "expr": "(2 * (clamp_max(max(absent(dnshealth_soa_serial{zone=\"$zone\"})), 1) or vector(0))) + ((1 - (clamp_max(max(absent(dnshealth_soa_serial{zone=\"$zone\"})), 1) or vector(0))) * (clamp_max(max(min by (zone) (dnshealth_soa_mname_resolves{zone=\"$zone\"}) or on() vector(0)), 1) or vector(0)) * (1 + (2 * vector(0))))",
           "instant": true,
           "range": false,
           "legendFormat": "SOA MNAME hostname resolves to A or AAAA",
@@ -320,7 +320,7 @@
         }
       ],
       "title": "SOA — status",
-      "description": "### All NSs report same SOA serial\n\n**Metric**: `max(dnshealth_soa_serial) - min(dnshealth_soa_serial) == 0`  \n**Why FAIL matters**: Secondaries haven't pulled the latest zone — resolvers may serve stale data depending on which NS they hit.  \n**Investigate**: SOA per-nameserver table below — find the NS reporting an out-of-date serial.\n\n### SOA MNAME is in zone's NS RR set\n\n**Metric**: `min(dnshealth_soa_mname_in_ns_set)`  \n**Why FAIL matters**: The MNAME identifies the primary master. If it's outside the NS set, NOTIFY may target the wrong server (hidden-master setups legitimately read 0 here — verify intent before alerting).  \n**Investigate**: SOA per-nameserver table — each row's `mname` label vs. the NS records tables.\n\n### SOA MNAME hostname resolves to A or AAAA\n\n**Metric**: `min(dnshealth_soa_mname_resolves)`  \n**Why FAIL matters**: NOTIFY and dynamic updates target the MNAME hostname; if it doesn't resolve, both mechanisms break silently.  \n**Investigate**: SOA per-nameserver table shows the `mname` label — try resolving that hostname externally.\n",
+      "description": "### All NSs report same SOA serial\n\n**Metric**: `max(dnshealth_soa_serial) - min(dnshealth_soa_serial) == 0`  \n**Why FAIL matters**: Secondaries haven't pulled the latest zone — resolvers may serve stale data depending on which NS they hit.  \n**N/A**: no NS answered the SOA query this cycle — there are no serials to compare.  \n**Investigate**: SOA per-nameserver table below — find the NS reporting an out-of-date serial.\n\n### SOA MNAME is in zone's NS RR set\n\n**Metric**: `min(dnshealth_soa_mname_in_ns_set)`  \n**WARN (not FAIL) matters**: The MNAME identifies the primary master. An MNAME outside the NS set is RFC-allowed and normal for hidden-master setups (NOTIFY-driven primary not in the public NS set) — so this is a soft 'verify intent' warning, not an error. If it's unintentional, NOTIFY may target the wrong server.  \n**N/A**: no NS answered the SOA query this cycle.  \n**Investigate**: SOA per-nameserver table — each row's `mname` label vs. the NS records tables.\n\n### SOA MNAME hostname resolves to A or AAAA\n\n**Metric**: `min(dnshealth_soa_mname_resolves)`  \n**Why FAIL matters**: NOTIFY and dynamic updates target the MNAME hostname; if it doesn't resolve, both mechanisms break silently.  \n**N/A**: no NS answered the SOA query this cycle — there is no MNAME to resolve.  \n**Investigate**: SOA per-nameserver table shows the `mname` label — try resolving that hostname externally.\n",
       "transparent": false,
       "datasource": {
         "type": "prometheus",

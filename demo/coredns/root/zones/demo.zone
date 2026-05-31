@@ -100,6 +100,20 @@ ns-names-mismatch          IN  NS   ns-parent-b.ns-names-mismatch.demo.
 ns-parent-a.ns-names-mismatch  IN  A  172.31.0.18
 ns-parent-b.ns-names-mismatch  IN  A  172.31.0.18
 
+; ns-ip-mismatch.demo. — parent glue and the auth's own A records for
+; the SAME NS hostnames disagree on IP (#37). Parent glues ns1 / ns2
+; to 172.31.0.19; the auth's zone file answers the A of ns1 / ns2 as
+; 172.31.0.20. Names agree, so the NS-name rows pass; only the new
+; "Parent glue agrees with auth-reported addresses" row FAILs. Both
+; .19 and .20 serve the zone (coredns-ns-ip-mismatch{,-b}) so the
+; exporter's re-resolved probes to .20 succeed — the divergence is
+; the point, not an unreachable server. Contrast ns-names-mismatch
+; (names differ, IPs agree).
+ns-ip-mismatch             IN  NS   ns1.ns-ip-mismatch.demo.
+ns-ip-mismatch             IN  NS   ns2.ns-ip-mismatch.demo.
+ns1.ns-ip-mismatch         IN  A    172.31.0.19
+ns2.ns-ip-mismatch         IN  A    172.31.0.19
+
 ; hidden-master.demo. — spec 007 stealth-NS detection. Parent
 ; advertises TWO NSes (ns1 + ns2 both glued at 172.31.0.21). The
 ; auth container at .21 reports a THIRD NS (`hidden-primary`) in

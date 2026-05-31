@@ -264,6 +264,40 @@ var nsStatusChecks = []statusCheck{
 			"**Scope limitation**: This row detects asymmetry between sources we can query. RFC 8499 \"stealth\" servers — those absent from EVERY public source — are not detectable by any single-vantage-point exporter and remain invisible to this check. See spec 007.  \n" +
 			"**Investigate**: NS records (from parent) and NS records (from the zone) tables side-by-side — the hostname appearing in only one table is the asymmetric NS. For self-only cases, check `dnshealth_ns_stealth_reachable{nameserver=X}` — 1 = working hidden master, 0 = leaked listing.",
 	},
+	// Per-nameserver glue-IP agreement (#37 / intoDNS "Glue" check).
+	// Scoped to NS hostnames present on BOTH sides so it isolates the
+	// IP-disagreement signal from the NAME-disagreement signal already
+	// covered by rows D and G — a name missing from one side (an
+	// out-of-bailiwick NS the auth doesn't host its own A for, or a lame
+	// server) is left to those rows, not double-counted here.
+	//
+	//	both = per-(zone,nameserver) count of distinct sources in ns_glue
+	//	       (== 2 iff the hostname is glued by the parent AND answered
+	//	       for by the auth)
+	//	notok = per-(zone,nameserver) "some (hostname,ip) tuple is on only
+	//	       one side" — min over the hostname's tuples of their distinct-
+	//	       source count != 2
+	//	bad  = both * notok  (1 only for a shared hostname whose IP sets
+	//	       differ between parent glue and the auth's own A/AAAA)
+	//	PASS = no bad nameserver anywhere in the zone.
+	//
+	// `or on() vector(0)` covers the no-series case; naExpr re-classifies
+	// the genuine "nothing to compare" case (no parent glue at all) as N/A
+	// so it doesn't fall through to a false FAIL — same trap as the SOA
+	// no-data rows (#49). The comparison is exact set-equality on the
+	// shared hostnames' (hostname, ip) tuples: an address present on only
+	// one side (e.g. a partially-glued anycast set) also FAILs.
+	{
+		refId:        "H",
+		expr:         `(max by (zone) ((count by (zone,nameserver) (group by (zone,nameserver,source) (dnshealth_ns_glue{zone="$zone"})) == bool 2) * (min by (zone,nameserver) (count by (zone,nameserver,ip) (group by (zone,nameserver,ip,source) (dnshealth_ns_glue{zone="$zone"}))) != bool 2)) == bool 0) or on() vector(0)`,
+		naExpr:       `absent(dnshealth_ns_glue{source="parent",zone="$zone"})`,
+		legendFormat: "Parent glue agrees with auth-reported addresses",
+		detail: "**Metric**: per-(nameserver, ip) source coverage in `dnshealth_ns_glue`, evaluated only for NS hostnames present on **both** sides  \n" +
+			"**Why FAIL matters**: For a nameserver the parent glues AND the auth answers for, the IP addresses disagree — the parent's glue points resolvers at one address while the zone's own A/AAAA records say another. Resolvers seeded from the parent reach the glue IP; resolvers that re-query the auth reach the other. Depending on caching and lookup path, end users hit different servers and see inconsistent answers. This is intoDNS's \"Glue\" check.  \n" +
+			"**Scope**: Only hostnames present on both sides are compared, so a name missing from one side (out-of-bailiwick NS whose A the auth doesn't host, or a lame server) is left to the NS-set rows above, not double-counted here. The check is set-equality on the shared hostnames' (hostname, IP) tuples — an address present on only one side (e.g. a partially-glued anycast set) also FAILs.  \n" +
+			"**N/A**: the parent provided no glue for this zone (every NS is out-of-bailiwick, or the delegation walk returned none) — there are no parent-side addresses to compare.  \n" +
+			"**Investigate**: NS records (from parent) vs NS records (from the zone) tables — find the hostname whose `ip` differs between the two sources.",
+	},
 }
 
 // soaNoData is the shared N/A predicate for the SOA rows: 1 when the

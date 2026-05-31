@@ -1,0 +1,36 @@
+; ns-ip-mismatch.demo. — exists to surface #37 in the demo. The
+; parent's root referral (demo/coredns/root/zones/demo.zone) glues
+; ns1 / ns2 to 172.31.0.19 (this container). The zone file below
+; advertises the SAME NS names but answers their A records as
+; 172.31.0.20 — a different address (served by coredns-ns-ip-mismatch-b).
+; NS names agree (parent and self both say ns1 / ns2); the IP
+; addresses behind those names disagree (.19 from the parent's glue,
+; .20 from the auth's own A records). Both endpoints serve this file.
+;
+; Contrast with ns-names-mismatch.demo. (names differ, IPs same):
+; that zone trips the NS-name rows; this one trips only the new
+; per-nameserver glue-IP agreement row.
+
+$ORIGIN ns-ip-mismatch.demo.
+$TTL 30
+
+@   IN  SOA  ns1.ns-ip-mismatch.demo. admin.ns-ip-mismatch.demo. (
+            2026053101  ; serial — single value across all queries
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+; Self-side NS RR set — same NAMES the parent advertised (ns1 / ns2)
+; so the NS-name rows pass and only the glue-IP row diverges.
+@     IN  NS   ns1.ns-ip-mismatch.demo.
+@     IN  NS   ns2.ns-ip-mismatch.demo.
+
+; The auth's own A records for its NS hostnames point at .20, NOT the
+; .19 the parent glues. This is the disagreement #37 detects.
+ns1   IN  A    172.31.0.20
+ns2   IN  A    172.31.0.20
+
+@     IN  A    172.31.0.19
+www   IN  A    172.31.0.19

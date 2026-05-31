@@ -54,6 +54,7 @@ var demoZones = []string{
 	"lame-nameserver.demo.",
 	"ns-mismatch.demo.",
 	"ns-names-mismatch.demo.",
+	"ns-ip-mismatch.demo.",
 	"v6-only.demo.",
 	"dup-glue.demo.",
 	"hidden-master.demo.",
@@ -150,6 +151,24 @@ var expectations = map[string]string{
 	"soa/A/ns-mismatch.demo.": "PASS",
 	"soa/B/ns-mismatch.demo.": "WARN",
 	"soa/C/ns-mismatch.demo.": "PASS",
+
+	// ns-ip-mismatch.demo. (#37) — the regression zone for NS row H.
+	// Parent glues ns1/ns2 to 172.31.0.19; the auth answers their A as
+	// 172.31.0.20. Same NS NAMES on both sides (so the name rows D/G
+	// PASS), different IP behind them (so row H FAILs). Two NSes meets
+	// the RFC 2182 minimum → row A WARNs.
+	"ns/H/ns-ip-mismatch.demo.": "FAIL",
+	"ns/D/ns-ip-mismatch.demo.": "PASS",
+	"ns/G/ns-ip-mismatch.demo.": "PASS",
+	"ns/A/ns-ip-mismatch.demo.": "WARN",
+	// Row H must NOT mis-fire elsewhere: agreeing zones PASS, a zone the
+	// parent provides no glue for reads N/A, and the name/lame-divergent
+	// zones are left to rows D/G (row H stays PASS, not double-counted).
+	"ns/H/healthy.demo.":           "PASS",
+	"ns/H/missing-glue.demo.":      "N/A",
+	"ns/H/lame-nameserver.demo.":   "PASS",
+	"ns/H/ns-mismatch.demo.":       "PASS",
+	"ns/H/ns-names-mismatch.demo.": "PASS",
 }
 
 // TestDashboardPromQLPredicates is the live PromQL evaluation gate.

@@ -1,0 +1,22 @@
+# Authoritative for ns-ip-mismatch.demo. The parent (root zone)
+# advertises this delegation with NSes ns1 / ns2, BOTH glued to
+# 172.31.0.19 (this container). When the exporter queries this
+# container for the A records of those same NS hostnames, the zone
+# file below answers 172.31.0.20 instead — same NS NAMES, a
+# DIFFERENT IP. Exercises #37: the parent's glue and the auth's own
+# addresses for its nameservers disagree, so resolvers seeded from
+# the parent talk to .19 while resolvers that re-query the auth are
+# told .20. Names agree (the NS-name rows pass); only the new
+# "Parent glue agrees with auth-reported addresses" row FAILs.
+#
+# Both .19 (this container, the address the parent glues) and .20
+# (coredns-ns-ip-mismatch-b, the address this zone file claims) serve
+# this same zone. The exporter reads the zone via the .19 glue, then
+# re-resolves the NS hostnames to .20 and probes there — so .20 must
+# answer too, or every downstream probe would time out.
+
+ns-ip-mismatch.demo. {
+    file /zones/ns-ip-mismatch.demo.zone
+    log
+    errors
+}

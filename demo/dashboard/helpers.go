@@ -53,8 +53,30 @@ func statusMappings() []any {
 	}
 }
 
+// nullNAMapping renders a missing cell (null — e.g. an outer-join gap
+// where one query had no series for that row) as a gray "n/a" instead
+// of letting it fall through to the base threshold colour, which paints
+// a textless GREEN cell that reads as a spurious pass. Appended to the
+// yes/no cell helpers below. Two cases hit this:
+//   - NS records (from the zone): a self-reported NS that the parent
+//     does not advertise has no SOA/recursion probe data, so its
+//     Responded/Recursion cells are null (e.g. ns-mismatch.demo.).
+//   - per-MX records: a Null MX "." sentinel emits no resolves/is-cname
+//     metric, so those cells are null.
+// "index": 2 keeps it after the 0/1 value entries; matching is by the
+// special "null" match, not index.
+func nullNAMapping() map[string]any {
+	return map[string]any{
+		"type": "special",
+		"options": map[string]any{
+			"match": "null",
+			"result": map[string]any{"text": "n/a", "color": "text", "index": 2},
+		},
+	}
+}
+
 // respondedYesNoMappings: 0/1 → no/yes (red/green) for the "Responded"
-// column of the NS records (from the zone) table.
+// column of the NS records (from the zone) table; null → gray "n/a".
 func respondedYesNoMappings() []any {
 	return []any{
 		map[string]any{
@@ -64,6 +86,7 @@ func respondedYesNoMappings() []any {
 				"1": map[string]any{"text": "yes", "color": "green", "index": 1},
 			},
 		},
+		nullNAMapping(),
 	}
 }
 
@@ -82,6 +105,7 @@ func recursionYesNoMappings() []any {
 				"1": map[string]any{"text": "RA=1", "color": "red", "index": 1},
 			},
 		},
+		nullNAMapping(),
 	}
 }
 
@@ -99,6 +123,7 @@ func cnameYesNoMappings() []any {
 				"1": map[string]any{"text": "yes", "color": "red", "index": 1},
 			},
 		},
+		nullNAMapping(),
 	}
 }
 

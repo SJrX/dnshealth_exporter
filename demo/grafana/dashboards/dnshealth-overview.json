@@ -41,7 +41,7 @@
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 8,
         "x": 0,
         "y": 0
@@ -198,7 +198,7 @@
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 8,
         "x": 8,
         "y": 0
@@ -327,7 +327,7 @@
         "uid": "${prometheus}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 8,
         "x": 16,
         "y": 0
@@ -445,7 +445,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 8
+        "y": 10
       },
       "repeatDirection": "h",
       "transformations": [
@@ -553,7 +553,7 @@
         "h": 10,
         "w": 8,
         "x": 8,
-        "y": 8
+        "y": 10
       },
       "repeatDirection": "h",
       "transformations": [
@@ -662,6 +662,17 @@
                       }
                     },
                     "type": "value"
+                  },
+                  {
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "color": "text",
+                        "index": 2,
+                        "text": "n/a"
+                      }
+                    },
+                    "type": "special"
                   }
                 ]
               },
@@ -701,6 +712,17 @@
                       }
                     },
                     "type": "value"
+                  },
+                  {
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "color": "text",
+                        "index": 2,
+                        "text": "n/a"
+                      }
+                    },
+                    "type": "special"
                   }
                 ]
               },
@@ -782,7 +804,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 8
+        "y": 10
       },
       "repeatDirection": "h",
       "transformations": [
@@ -938,7 +960,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 20
       },
       "id": 0,
       "panels": [
@@ -992,7 +1014,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 19
+            "y": 21
           },
           "repeatDirection": "h",
           "transformations": [
@@ -1135,7 +1157,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 19
+            "y": 21
           },
           "repeatDirection": "h",
           "transformations": [
@@ -1265,6 +1287,17 @@
                           }
                         },
                         "type": "value"
+                      },
+                      {
+                        "options": {
+                          "match": "null",
+                          "result": {
+                            "color": "text",
+                            "index": 2,
+                            "text": "n/a"
+                          }
+                        },
+                        "type": "special"
                       }
                     ]
                   },
@@ -1304,6 +1337,17 @@
                           }
                         },
                         "type": "value"
+                      },
+                      {
+                        "options": {
+                          "match": "null",
+                          "result": {
+                            "color": "text",
+                            "index": 2,
+                            "text": "n/a"
+                          }
+                        },
+                        "type": "special"
                       }
                     ]
                   },
@@ -1343,6 +1387,17 @@
                           }
                         },
                         "type": "value"
+                      },
+                      {
+                        "options": {
+                          "match": "null",
+                          "result": {
+                            "color": "text",
+                            "index": 2,
+                            "text": "n/a"
+                          }
+                        },
+                        "type": "special"
                       }
                     ]
                   },
@@ -1411,7 +1466,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 31
       },
       "id": 0,
       "panels": [
@@ -1435,7 +1490,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 30
+            "y": 32
           },
           "repeatDirection": "h",
           "options": {
@@ -1485,7 +1540,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 30
+            "y": 32
           },
           "repeatDirection": "h",
           "options": {
@@ -1548,7 +1603,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 38
+            "y": 40
           },
           "repeatDirection": "h",
           "options": {
@@ -1598,7 +1653,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 38
+            "y": 40
           },
           "repeatDirection": "h",
           "options": {

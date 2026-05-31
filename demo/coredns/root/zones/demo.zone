@@ -128,3 +128,9 @@ ns1.mx-broken              IN  A    172.31.0.24
 ; 172.31.0.23; auth publishes a single MX RR `0 .` per RFC 7505.
 mx-null                    IN  NS   ns1.mx-null.demo.
 ns1.mx-null                IN  A    172.31.0.23
+
+; mx-null-conflict.demo. — RFC 7505 violation demo (issue #46). In-zone
+; NS at 172.31.0.26; auth publishes BOTH `0 .` and a real MX, so the
+; dashboard MX row E ("no Null-MX/real-MX conflict") FAILs for it.
+mx-null-conflict           IN  NS   ns1.mx-null-conflict.demo.
+ns1.mx-null-conflict       IN  A    172.31.0.26

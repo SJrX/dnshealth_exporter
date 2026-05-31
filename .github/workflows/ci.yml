@@ -46,9 +46,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # docker + docker compose are preinstalled on ubuntu-latest, so
-      # no setup step needed. smoke.sh handles bring-up, teardown, and
-      # dumps the last 50 lines of compose logs on assertion failure
-      # for debuggability from the Actions log.
+      # Go is needed for smoke.sh Step 6, the live dashboard-PromQL
+      # predicate evaluation (issue #46) — it runs the promql_live test
+      # against the running Prometheus. Without a toolchain that step
+      # warns and skips, silently losing the coverage in CI, so install
+      # Go explicitly here. docker + docker compose are preinstalled on
+      # ubuntu-latest.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      # smoke.sh handles bring-up, teardown, and dumps the last 50 lines
+      # of compose logs on assertion failure for debuggability from the
+      # Actions log.
       - name: Run demo smoke test
         run: cd demo && ./smoke.sh

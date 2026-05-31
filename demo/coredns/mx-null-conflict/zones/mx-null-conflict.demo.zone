@@ -1,0 +1,30 @@
+; mx-null-conflict.demo. — RFC 7505 VIOLATION demo (issue #46). The
+; zone publishes BOTH a Null MX RR (`0 .`) and a real MX record. Per
+; RFC 7505 §3 the Null MX MUST be the sole MX record; coexistence is
+; malformed. The exporter therefore reports mx_null_mx=0 (the canonical
+; single-`0 .` form is not met) but mx_has_null_mx_rr=1 and mx_count=2,
+; which is exactly what the dashboard's MX row E predicate keys on to
+; render FAIL. The real MX target resolves so that ONLY the Null-MX
+; coexistence is wrong — row E FAILs while the resolution rows do not
+; report a resolution failure for the real target.
+
+$ORIGIN mx-null-conflict.demo.
+$TTL 30
+
+@   IN  SOA  ns1.mx-null-conflict.demo. admin.mx-null-conflict.demo. (
+            2026053101  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.mx-null-conflict.demo.
+
+; Both forms present — the RFC 7505 violation this zone demonstrates.
+@     IN  MX   0 .
+@     IN  MX   10 mail.mx-null-conflict.demo.
+
+mail  IN  A    172.31.0.26
+ns1   IN  A    172.31.0.26
+@     IN  A    172.31.0.26

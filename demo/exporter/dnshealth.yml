@@ -13,6 +13,7 @@ zones:
   - v6-only.demo.
   - dup-glue.demo.
   - ns-names-mismatch.demo.
+  - ns-ip-mismatch.demo.
   - hidden-master.demo.
   - mx-healthy.demo.
   - mx-broken.demo.

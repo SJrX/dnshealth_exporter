@@ -178,6 +178,34 @@ grep -E '^dnshealth_ns_classification_count\{[^}]+\} 0$' "${METRICS_FILE}" \
     | grep -F 'classification="self-only"' >/dev/null \
     || fail "healthy.demo.: self-only count gauge not 0 (expected clean state)"
 
+echo "A3e: ns-ip-mismatch.demo. surfaces parent-vs-self glue IP divergence (issue #37)"
+# Parent glues ns1/ns2 to 172.31.0.19 (the container); the auth's own
+# A records for those SAME hostnames answer 172.31.0.20. Both sides of
+# the divergence must surface as dnshealth_ns_glue series so the new
+# NS-status row H ("Parent glue agrees with auth-reported addresses")
+# has something to compare. Names agree, only the IP differs.
+grep -E '^dnshealth_ns_glue\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="ns-ip-mismatch.demo."' \
+    | grep -F 'source="parent"' \
+    | grep -F 'nameserver="ns1.ns-ip-mismatch.demo."' \
+    | grep -F 'ip="172.31.0.19"' >/dev/null \
+    || fail "ns-ip-mismatch.demo.: parent-side glue ns1 -> 172.31.0.19 missing"
+grep -E '^dnshealth_ns_glue\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="ns-ip-mismatch.demo."' \
+    | grep -F 'source="self"' \
+    | grep -F 'nameserver="ns1.ns-ip-mismatch.demo."' \
+    | grep -F 'ip="172.31.0.20"' >/dev/null \
+    || fail "ns-ip-mismatch.demo.: self-side glue ns1 -> 172.31.0.20 missing"
+# The auth must NOT also report the parent's .19 for ns1 — otherwise the
+# IP sets would intersect and row H would not FAIL. Guard the divergence.
+if grep -E '^dnshealth_ns_glue\{[^}]+\} 1$' "${METRICS_FILE}" \
+    | grep -F 'zone="ns-ip-mismatch.demo."' \
+    | grep -F 'source="self"' \
+    | grep -F 'nameserver="ns1.ns-ip-mismatch.demo."' \
+    | grep -F 'ip="172.31.0.19"' >/dev/null; then
+    fail "ns-ip-mismatch.demo.: self side unexpectedly reports parent glue IP 172.31.0.19 (no divergence to detect)"
+fi
+
 echo "A4: probe cycle ran and produced query counts"
 grep -E '^dnshealth_probe_cycle_duration_seconds [0-9]' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_probe_cycle_duration_seconds not present"

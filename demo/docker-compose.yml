@@ -207,6 +207,24 @@ services:
           - ns1.mx-null.demo.
     restart: unless-stopped
 
+  # Authoritative for mx-null-conflict.demo. — RFC 7505 violation demo
+  # (issue #46). Zone publishes BOTH `0 .` and a real MX, so the
+  # dashboard MX row E ("no Null-MX/real-MX conflict") FAILs for it.
+  # Gives the live-PromQL smoke check a fixture for row E's FAIL path
+  # (spec 008 bug #4 shipped because no zone exercised it).
+  coredns-mx-null-conflict:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/mx-null-conflict/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/mx-null-conflict/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.26
+        aliases:
+          - ns1.mx-null-conflict.demo.
+    restart: unless-stopped
+
   # Authoritative for mx-healthy.demo. — spec 008 MX-prober happy
   # path. Two MXes at priorities 10 + 20, both targets in-zone and
   # resolvable, neither CNAMEd.
@@ -266,6 +284,7 @@ services:
       - coredns-mx-healthy
       - coredns-mx-broken
       - coredns-mx-null
+      - coredns-mx-null-conflict
     restart: unless-stopped
 
   prometheus:

@@ -1,0 +1,13 @@
+# Authoritative for mx-null-conflict.demo. — RFC 7505 VIOLATION demo.
+# The zone publishes a Null MX RR (`0 .`) AND a real MX record at the
+# same time. RFC 7505 §3 requires Null MX to be the SOLE MX record;
+# coexistence is undefined. This zone exists so the dashboard's MX
+# row E ("No conflict between Null MX and real MX records") has a
+# fixture that makes it FAIL — the exact case spec 008 bug #4 shipped
+# undetected (issue #46 / #48 audit D-9).
+
+mx-null-conflict.demo. {
+    file /zones/mx-null-conflict.demo.zone
+    log
+    errors
+}

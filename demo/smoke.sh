@@ -326,6 +326,29 @@ grep -E '^dnshealth_mx_info\{[^}]+\} 1$' "${METRICS_FILE}" \
     | grep -F 'priority="00000"' >/dev/null \
     || fail "mx-null.demo.: info gauge for Null MX sentinel \".\" missing"
 
+step "Step 6: evaluate dashboard PromQL predicates against live Prometheus"
+# Issue #46: the status-row predicates are generated Go strings that no
+# Go test evaluates — bugs where a predicate returns the wrong state, an
+# empty vector (blank cell), or short-circuits (audit D-4 / D-9) are
+# invisible to `go test` and were historically caught only by a human
+# reading Grafana. This runs the promql_live test, which imports the
+# exact predicates the dashboard ships and queries Prometheus' API with
+# each row × each demo zone. Prometheus (5s scrape) has multiple cycles
+# of data by now (Step 3 waited for the first cycle + slept 20s).
+#
+# Requires Go on the runner. Skipped with a loud warning if `go` is
+# absent so a developer without a toolchain can still run the metric
+# greps above; CI installs Go (see .github/workflows/ci.yml).
+if command -v go >/dev/null 2>&1; then
+    ( cd .. && PROMQL_CHECK_URL="http://localhost:${PROMETHEUS_PORT:-9090}" \
+        go test -tags=promql_live -count=1 -run TestDashboardPromQLPredicates \
+        ./demo/dashboard/ ) \
+        || fail "dashboard PromQL predicate evaluation failed (see test output above)"
+    echo "dashboard PromQL predicates evaluated OK"
+else
+    printf 'WARNING: go not found — skipping live PromQL predicate check (issue #46).\n' >&2
+fi
+
 echo "A5: build info present"
 grep -F 'dnshealth_build_info' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_build_info not present"

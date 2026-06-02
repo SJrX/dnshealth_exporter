@@ -121,6 +121,16 @@ func fetchTXTRecords(ctx context.Context, name string, nameservers []Nameserver,
 				"name", name, "ip", ns.IP, "err", err, "duration", time.Since(start))
 			continue
 		}
+		// Only a NOERROR or NXDOMAIN response is an authoritative answer
+		// (record present, or genuinely absent). A soft failure
+		// (SERVFAIL / REFUSED / etc.) means THIS nameserver couldn't
+		// answer — try the next one rather than misreporting the record
+		// as absent and silently skipping a healthy sibling NS.
+		if resp.Rcode != dns.RcodeSuccess && resp.Rcode != dns.RcodeNameError {
+			logger.Debug("email_auth: TXT query non-answer rcode, trying next nameserver",
+				"name", name, "ip", ns.IP, "rcode", dns.RcodeToString[resp.Rcode], "duration", time.Since(start))
+			continue
+		}
 		var recs []string
 		for _, rr := range resp.Answer {
 			if txt, isTXT := rr.(*dns.TXT); isTXT {

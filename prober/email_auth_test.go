@@ -5,6 +5,7 @@ package prober_test
 import (
 	"testing"
 
+	"github.com/miekg/dns"
 	"github.com/sjr/dnshealth_exporter/prober"
 	. "github.com/sjr/dnshealth_exporter/testutil"
 )
@@ -158,6 +159,42 @@ func TestEmailAuth_MalformedDMARC(t *testing.T) {
 	AssertGauge(t, metrics, "dnshealth_dmarc_present", WithLabels("zone", "example.test"), WithValue(1))
 	AssertGauge(t, metrics, "dnshealth_dmarc_valid", WithLabels("zone", "example.test"), WithValue(0))
 	AssertGaugeMissing(t, metrics, "dnshealth_dmarc_policy", WithLabels("zone", "example.test"))
+}
+
+// TestEmailAuth_FailsOverOnServfail — when the first nameserver returns
+// SERVFAIL for the TXT query, the prober must try the next nameserver
+// rather than misreporting the record as absent. ns1 (127.240.0.2)
+// SERVFAILs everything; ns2 (127.240.0.3) serves the real SPF record.
+func TestEmailAuth_FailsOverOnServfail(t *testing.T) {
+	// Fixture Setup
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			NS("example.test", "ns2.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			A("ns2.example.test", "127.240.0.3"),
+		).
+		ServerWithOptions("127.240.0.2:"+TestPort, ServerOptions{Rcode: dns.RcodeServerFailure}).
+		Server("127.240.0.3:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			NS("example.test", "ns2.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			A("ns2.example.test", "127.240.0.3"),
+			TXT("example.test", "v=spf1 -all"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT
+	metrics := env.Probe(prober.ProbeEmailAuth, "example.test")
+
+	// Verification — the SERVFAIL from ns1 must NOT be read as "no SPF";
+	// the prober fails over to ns2 and finds the record.
+	AssertGauge(t, metrics, "dnshealth_spf_present", WithLabels("zone", "example.test"), WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_spf_terminal_all",
+		WithLabels("zone", "example.test", "qualifier", "fail"), WithValue(1))
 }
 
 // TestEmailAuth_MultiStringSPF — a long SPF record published as two

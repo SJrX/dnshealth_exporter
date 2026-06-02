@@ -1,0 +1,24 @@
+; email-healthy.demo. — the email-auth happy path (spec 009 US1+US2).
+; SPF ends in -all (hard fail unauthorized senders); DMARC enforces
+; p=reject. Every "Email auth — status" row reads PASS.
+
+$ORIGIN email-healthy.demo.
+$TTL 30
+
+@   IN  SOA  ns1.email-healthy.demo. admin.email-healthy.demo. (
+            2026060101  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.email-healthy.demo.
+ns1     IN  A    172.31.0.30
+@       IN  A    172.31.0.30
+
+; SPF at the apex — single record, restrictive terminal qualifier.
+@       IN  TXT  "v=spf1 -all"
+
+; DMARC at _dmarc — enforcing policy with aggregate reporting.
+_dmarc  IN  TXT  "v=DMARC1; p=reject; rua=mailto:dmarc@example.com"

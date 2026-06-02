@@ -64,13 +64,21 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 		WithPanel(mxStatusTable(yOffset)).
 		WithPanel(mxRecordsTable(yOffset)))
 
+	// Email-auth section (spec 009) — a standalone full-width status
+	// panel inside its own collapsible row, expanded by default. Row
+	// header at Y=35; the panel at Y=36, height 8. SPF + DMARC health,
+	// MX-independent (FR-017).
+	b = b.WithRow(dashboard.NewRowBuilder("Email auth — SPF + DMARC").
+		Collapsed(false).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(35, yOffset), W: 24, H: 1}).
+		WithPanel(emailAuthStatusTable(yOffset)))
+
 	// Operator row — collapsed by default; contains four timeseries.
-	// Y shifted from 38 → 33 after the MX section was condensed from
-	// stacked-full-width (16 grid units) into a single half-width row
-	// (10 grid units + 1 for the row header).
+	// Shifted down to Y=45 to make room for the email-auth section
+	// (was Y=35 before spec 009).
 	b = b.WithRow(dashboard.NewRowBuilder("Operator / debug views").
 		Collapsed(true).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(35, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(45, yOffset), W: 24, H: 1}).
 		WithPanel(probeCycleDurationTimeseries(yOffset)).
 		WithPanel(dnsQueryRateTimeseries(yOffset)).
 		WithPanel(soaSerialsTimeseries(yOffset)).

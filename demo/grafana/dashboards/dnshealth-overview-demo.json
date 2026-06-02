@@ -1484,12 +1484,162 @@
     {
       "type": "row",
       "collapsed": true,
-      "title": "Operator / debug views",
+      "title": "Email auth — SPF + DMARC",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 35
+      },
+      "id": 0,
+      "panels": [
+        {
+          "type": "table",
+          "targets": [
+            {
+              "expr": "(2 * (clamp_max(max(absent(dnshealth_spf_present{zone=\"$zone\"})), 1) or vector(0))) + ((1 - (clamp_max(max(absent(dnshealth_spf_present{zone=\"$zone\"})), 1) or vector(0))) * (clamp_max(max(1 - clamp_max((max by (zone) (dnshealth_spf_record_count{zone=\"$zone\"}) \u003e bool 1) + (max by (zone) (dnshealth_spf_present{zone=\"$zone\"}) == bool 1) * (max by (zone) (dnshealth_spf_valid{zone=\"$zone\"}) == bool 0), 1)), 1) or vector(0)) * (1 + (2 * (clamp_max(max(max by (zone) (dnshealth_spf_present{zone=\"$zone\"}) == bool 0), 1) or vector(0)))))",
+              "instant": true,
+              "range": false,
+              "legendFormat": "Zone publishes a single valid SPF record",
+              "refId": "A"
+            },
+            {
+              "expr": "(2 * (clamp_max(max(absent(dnshealth_spf_terminal_all{zone=\"$zone\"})), 1) or vector(0))) + ((1 - (clamp_max(max(absent(dnshealth_spf_terminal_all{zone=\"$zone\"})), 1) or vector(0))) * (clamp_max(max(max by (zone) (dnshealth_spf_terminal_all{zone=\"$zone\"})), 1) or vector(0)) * (1 + (2 * (clamp_max(max(max by (zone) (dnshealth_spf_terminal_all{zone=\"$zone\",qualifier=~\"neutral|none|pass\"})), 1) or vector(0)))))",
+              "instant": true,
+              "range": false,
+              "legendFormat": "SPF ends in a restrictive 'all' qualifier",
+              "refId": "B"
+            },
+            {
+              "expr": "(2 * (clamp_max(max(absent(dnshealth_dmarc_present{zone=\"$zone\"})), 1) or vector(0))) + ((1 - (clamp_max(max(absent(dnshealth_dmarc_present{zone=\"$zone\"})), 1) or vector(0))) * (clamp_max(max(1 - clamp_max((max by (zone) (dnshealth_dmarc_present{zone=\"$zone\"}) == bool 1) * (max by (zone) (dnshealth_dmarc_valid{zone=\"$zone\"}) == bool 0), 1)), 1) or vector(0)) * (1 + (2 * (clamp_max(max(max by (zone) (dnshealth_dmarc_present{zone=\"$zone\"}) == bool 0), 1) or vector(0)))))",
+              "instant": true,
+              "range": false,
+              "legendFormat": "Zone publishes a valid DMARC record",
+              "refId": "C"
+            },
+            {
+              "expr": "(2 * (clamp_max(max(absent(dnshealth_dmarc_policy{zone=\"$zone\"})), 1) or vector(0))) + ((1 - (clamp_max(max(absent(dnshealth_dmarc_policy{zone=\"$zone\"})), 1) or vector(0))) * (clamp_max(max(max by (zone) (dnshealth_dmarc_policy{zone=\"$zone\"})), 1) or vector(0)) * (1 + (2 * (clamp_max(max(max by (zone) (dnshealth_dmarc_policy{zone=\"$zone\",policy=\"none\"})), 1) or vector(0)))))",
+              "instant": true,
+              "range": false,
+              "legendFormat": "DMARC enforces a policy (quarantine or reject)",
+              "refId": "D"
+            }
+          ],
+          "title": "Email auth — status",
+          "description": "### Zone publishes a single valid SPF record\n\n**Metric**: `dnshealth_spf_present` / `dnshealth_spf_record_count` / `dnshealth_spf_valid`  \n**WARN (absent)**: the zone publishes no SPF record. Even a domain that sends no mail should publish `v=spf1 -all` to stop spammers forging it as the sender — SPF protects the domain regardless of whether it receives mail (MX), so this applies to no-mail and Null-MX zones too. Verify intent.  \n**FAIL (broken)**: more than one `v=spf1` record (RFC 7208 §3.2 permanent error) or a malformed record — receivers get a PermError and SPF effectively does not work.  \n**Investigate**: the zone's apex TXT records.\n\n### SPF ends in a restrictive 'all' qualifier\n\n**Metric**: `dnshealth_spf_terminal_all{qualifier}`  \n**PASS**: the record ends in `-all` (fail) or `~all` (softfail) — unauthorized senders are rejected or marked.  \n**WARN**: `?all` (neutral), no terminal `all`, or `+all` — `+all` is syntactically valid but authorizes ANY sender to spoof the domain, which is reckless; the others assert nothing. Verify intent.  \n**N/A**: the zone has no single SPF record (absent, or multiple records — see the row above).  \n**Investigate**: the apex `v=spf1` record's final mechanism.\n\n### Zone publishes a valid DMARC record\n\n**Metric**: `dnshealth_dmarc_present` / `dnshealth_dmarc_valid`  \n**WARN (absent)**: no DMARC record at `_dmarc.\u003czone\u003e`. DMARC ties SPF/DKIM together with alignment and tells receivers what to do on failure; without it, look-alike spoofing SPF alone can't stop is unmitigated. A no-mail / Null-MX domain still benefits (publish `p=reject`). Verify intent.  \n**FAIL (broken)**: a `v=DMARC1` record with no valid `p=` tag (RFC 7489 §6.3 requires it) — receivers can't apply a policy.  \n**Investigate**: the `_dmarc.\u003czone\u003e` TXT record.\n\n### DMARC enforces a policy (quarantine or reject)\n\n**Metric**: `dnshealth_dmarc_policy{policy}`  \n**PASS**: `p=quarantine` or `p=reject` — the domain enforces alignment, so spoofed mail is quarantined or rejected.  \n**WARN**: `p=none` — DMARC is published but only MONITORS; it does not enforce, so spoofed mail is still delivered. A legitimate rollout stage, but verify it's intended to stay there.  \n**N/A**: the zone has no valid DMARC record (absent or malformed — see the row above).  \n**Investigate**: the `p=` tag of the `_dmarc.\u003czone\u003e` record.\n",
+          "transparent": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 36
+          },
+          "repeatDirection": "h",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "last"
+                ],
+                "mode": "seriesToRows"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Field": "Test",
+                  "Last": "Result"
+                },
+                "indexByName": {
+                  "Field": 0,
+                  "Last": 1
+                }
+              }
+            }
+          ],
+          "options": {
+            "frameIndex": 0,
+            "showHeader": true,
+            "showTypeIcons": false,
+            "footer": {
+              "show": false,
+              "reducer": null,
+              "countRows": false
+            },
+            "cellHeight": "sm"
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Result"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "options": {
+                          "0": {
+                            "color": "red",
+                            "index": 0,
+                            "text": "FAIL"
+                          },
+                          "1": {
+                            "color": "green",
+                            "index": 1,
+                            "text": "PASS"
+                          },
+                          "2": {
+                            "color": "text",
+                            "index": 2,
+                            "text": "N/A"
+                          },
+                          "3": {
+                            "color": "yellow",
+                            "index": 3,
+                            "text": "WARN"
+                          }
+                        },
+                        "type": "value"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "collapsed": true,
+      "title": "Operator / debug views",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 45
       },
       "id": 0,
       "panels": [
@@ -1513,7 +1663,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 36
+            "y": 46
           },
           "repeatDirection": "h",
           "options": {
@@ -1563,7 +1713,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 36
+            "y": 46
           },
           "repeatDirection": "h",
           "options": {
@@ -1626,7 +1776,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 44
+            "y": 54
           },
           "repeatDirection": "h",
           "options": {
@@ -1676,7 +1826,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 44
+            "y": 54
           },
           "repeatDirection": "h",
           "options": {

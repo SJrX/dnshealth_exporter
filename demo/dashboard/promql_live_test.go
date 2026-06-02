@@ -63,6 +63,12 @@ var demoZones = []string{
 	"mx-null.demo.",
 	"mx-null-conflict.demo.",
 	"missing-glue.demo.",
+	"email-healthy.demo.",
+	"email-spf-only.demo.",
+	"email-none.demo.",
+	"email-permissive.demo.",
+	"email-broken.demo.",
+	"email-nomail.demo.",
 }
 
 // stateName maps the four-state numeric value to its label.
@@ -82,6 +88,7 @@ func panelChecks() []struct {
 		{"ns", nsStatusChecks},
 		{"soa", soaStatusChecks},
 		{"mx", mxStatusChecks},
+		{"email_auth", emailAuthStatusChecks},
 	}
 }
 
@@ -169,6 +176,48 @@ var expectations = map[string]string{
 	"ns/H/lame-nameserver.demo.":   "PASS",
 	"ns/H/ns-mismatch.demo.":       "PASS",
 	"ns/H/ns-names-mismatch.demo.": "PASS",
+
+	// Email auth (spec 009). Panel rows: A = SPF valid, B = SPF
+	// qualifier, C = DMARC valid, D = DMARC policy.
+	// email-healthy — SPF -all + DMARC p=reject → all PASS.
+	"email_auth/A/email-healthy.demo.": "PASS",
+	"email_auth/B/email-healthy.demo.": "PASS",
+	"email_auth/C/email-healthy.demo.": "PASS",
+	"email_auth/D/email-healthy.demo.": "PASS",
+	// email-spf-only — SPF good, no DMARC → C WARN (absent), D N/A.
+	"email_auth/A/email-spf-only.demo.": "PASS",
+	"email_auth/B/email-spf-only.demo.": "PASS",
+	"email_auth/C/email-spf-only.demo.": "WARN",
+	"email_auth/D/email-spf-only.demo.": "N/A",
+	// email-none — neither record → present rows WARN, the qualifier /
+	// policy rows N/A.
+	"email_auth/A/email-none.demo.": "WARN",
+	"email_auth/B/email-none.demo.": "N/A",
+	"email_auth/C/email-none.demo.": "WARN",
+	"email_auth/D/email-none.demo.": "N/A",
+	// email-permissive — +all and p=none: present rows PASS, weak rows WARN.
+	"email_auth/A/email-permissive.demo.": "PASS",
+	"email_auth/B/email-permissive.demo.": "WARN",
+	"email_auth/C/email-permissive.demo.": "PASS",
+	"email_auth/D/email-permissive.demo.": "WARN",
+	// email-broken — two SPF records + malformed DMARC → valid rows FAIL,
+	// the qualifier / policy rows N/A (no single SPF / no valid policy).
+	"email_auth/A/email-broken.demo.": "FAIL",
+	"email_auth/B/email-broken.demo.": "N/A",
+	"email_auth/C/email-broken.demo.": "FAIL",
+	"email_auth/D/email-broken.demo.": "N/A",
+	// email-nomail — Null MX yet publishes -all + p=reject: all PASS,
+	// proving the rows are MX-independent (FR-017).
+	"email_auth/A/email-nomail.demo.": "PASS",
+	"email_auth/B/email-nomail.demo.": "PASS",
+	"email_auth/C/email-nomail.demo.": "PASS",
+	"email_auth/D/email-nomail.demo.": "PASS",
+	// A non-email zone (no SPF/DMARC) must render sanely, not break the
+	// universal invariant: present rows WARN, qualifier/policy rows N/A.
+	"email_auth/A/healthy.demo.": "WARN",
+	"email_auth/B/healthy.demo.": "N/A",
+	"email_auth/C/healthy.demo.": "WARN",
+	"email_auth/D/healthy.demo.": "N/A",
 }
 
 // TestDashboardPromQLPredicates is the live PromQL evaluation gate.

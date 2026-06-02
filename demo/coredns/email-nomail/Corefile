@@ -1,0 +1,11 @@
+# Authoritative for email-nomail.demo. — a no-mail domain done right
+# (spec 009 FR-017). It publishes a Null MX (RFC 7505 — "I accept no
+# email") AND the anti-spoofing records v=spf1 -all + DMARC p=reject.
+# Proves email-auth is MX-INDEPENDENT: all four "Email auth — status"
+# rows read PASS even though the zone receives no mail.
+
+email-nomail.demo. {
+    file /zones/email-nomail.demo.zone
+    log
+    errors
+}

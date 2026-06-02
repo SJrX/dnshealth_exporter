@@ -23,6 +23,7 @@ func TestStatusChecksHaveDetail(t *testing.T) {
 		{"nsStatusChecks", nsStatusChecks},
 		{"soaStatusChecks", soaStatusChecks},
 		{"mxStatusChecks", mxStatusChecks},
+		{"emailAuthStatusChecks", emailAuthStatusChecks},
 	}
 
 	for _, tc := range cases {
@@ -93,10 +94,11 @@ func TestComposeStatusExpr(t *testing.T) {
 
 	// Every real status check must compose to a non-empty expression.
 	lists := map[string][]statusCheck{
-		"parentStatusChecks": parentStatusChecks,
-		"nsStatusChecks":     nsStatusChecks,
-		"soaStatusChecks":    soaStatusChecks,
-		"mxStatusChecks":     mxStatusChecks,
+		"parentStatusChecks":    parentStatusChecks,
+		"nsStatusChecks":        nsStatusChecks,
+		"soaStatusChecks":       soaStatusChecks,
+		"mxStatusChecks":        mxStatusChecks,
+		"emailAuthStatusChecks": emailAuthStatusChecks,
 	}
 	for name, checks := range lists {
 		for i, c := range checks {

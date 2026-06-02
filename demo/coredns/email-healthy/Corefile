@@ -1,0 +1,9 @@
+# Authoritative for email-healthy.demo. — fully configured email-auth
+# (spec 009): a single SPF record ending -all and a DMARC record with
+# p=reject. All four "Email auth — status" rows read PASS.
+
+email-healthy.demo. {
+    file /zones/email-healthy.demo.zone
+    log
+    errors
+}

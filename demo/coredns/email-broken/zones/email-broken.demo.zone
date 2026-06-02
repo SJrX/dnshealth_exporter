@@ -1,0 +1,28 @@
+; email-broken.demo. — broken email-auth records (spec 009). Two
+; v=spf1 records is an RFC 7208 §3.2 PermError (a receiver can't pick
+; one); the DMARC record omits the mandatory p= tag (RFC 7489 §6.3).
+; Row A (SPF valid) and row C (DMARC valid) both FAIL; the qualifier
+; row reads N/A (no single SPF record) and the policy row N/A (no valid
+; DMARC).
+
+$ORIGIN email-broken.demo.
+$TTL 30
+
+@   IN  SOA  ns1.email-broken.demo. admin.email-broken.demo. (
+            2026060101  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.email-broken.demo.
+ns1     IN  A    172.31.0.34
+@       IN  A    172.31.0.34
+
+; TWO SPF records — the multiple-record PermError.
+@       IN  TXT  "v=spf1 -all"
+@       IN  TXT  "v=spf1 include:_spf.example.net ~all"
+
+; Malformed DMARC — v=DMARC1 present but no p= tag.
+_dmarc  IN  TXT  "v=DMARC1; rua=mailto:dmarc@example.com"

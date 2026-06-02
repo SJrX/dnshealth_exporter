@@ -24,6 +24,19 @@ The stable external surface this feature adds to `/metrics`. All gauges, all per
 | `dnshealth_dmarc_rua_present` | gauge | `zone` | 0 / 1 | 1 iff a `rua=` tag is present (optional). |
 | `dnshealth_dmarc_ruf_present` | gauge | `zone` | 0 / 1 | 1 iff a `ruf=` tag is present (optional). |
 
+## Label note (implementation)
+
+These are per-zone signals, but they are emitted through the prober's
+`ProbeResult` pipeline (like `dnshealth_mx_info`), so each series also
+carries empty `nameserver=""` / `ip=""` labels that `BuildRegistry`
+stamps on every metric. The meaningful key is still `zone` (plus
+`qualifier` / `policy` on the info gauges); the dashboard predicates wrap
+selectors in `max by (zone)(…)` — the same idiom the SOA rows use over
+`dnshealth_soa_*` — so the empty labels are inert. Zero-emission for the
+booleans comes from the per-cycle registry plus the prober emitting a
+value (0 when absent) for every reachable zone every cycle, not from a
+runner-owned `Reset()+Set(0)`.
+
 ## Cardinality
 
 Per zone: ~4 SPF series + ~6 DMARC series (info gauges contribute one series each for the single applicable enum value). For N zones, O(10·N) — bounded, low.

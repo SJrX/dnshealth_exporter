@@ -1,0 +1,10 @@
+# Authoritative for email-permissive.demo. — records present but weak
+# (spec 009): SPF ends in +all (authorizes any sender) and DMARC is
+# p=none (monitoring only). The present rows PASS, but the qualifier and
+# policy rows WARN — valid records, reckless/non-enforcing policies.
+
+email-permissive.demo. {
+    file /zones/email-permissive.demo.zone
+    log
+    errors
+}

@@ -267,6 +267,86 @@ services:
           - ns1.mx-null-conflict.demo.
     restart: unless-stopped
 
+  # email-*.demo. — Tier-1 email-auth demos (spec 009). Each serves
+  # SPF/DMARC TXT records exercising one "Email auth — status" state.
+  coredns-email-healthy:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-healthy/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-healthy/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.30
+        aliases:
+          - ns1.email-healthy.demo.
+    restart: unless-stopped
+
+  coredns-email-spf-only:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-spf-only/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-spf-only/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.31
+        aliases:
+          - ns1.email-spf-only.demo.
+    restart: unless-stopped
+
+  coredns-email-none:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-none/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-none/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.32
+        aliases:
+          - ns1.email-none.demo.
+    restart: unless-stopped
+
+  coredns-email-permissive:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-permissive/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-permissive/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.33
+        aliases:
+          - ns1.email-permissive.demo.
+    restart: unless-stopped
+
+  coredns-email-broken:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-broken/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-broken/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.34
+        aliases:
+          - ns1.email-broken.demo.
+    restart: unless-stopped
+
+  coredns-email-nomail:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-nomail/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-nomail/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.35
+        aliases:
+          - ns1.email-nomail.demo.
+    restart: unless-stopped
+
   # Authoritative for mx-healthy.demo. — spec 008 MX-prober happy
   # path. Two MXes at priorities 10 + 20, both targets in-zone and
   # resolvable, neither CNAMEd.
@@ -329,6 +409,12 @@ services:
       - coredns-mx-broken
       - coredns-mx-null
       - coredns-mx-null-conflict
+      - coredns-email-healthy
+      - coredns-email-spf-only
+      - coredns-email-none
+      - coredns-email-permissive
+      - coredns-email-broken
+      - coredns-email-nomail
     restart: unless-stopped
 
   prometheus:

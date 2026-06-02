@@ -148,3 +148,19 @@ ns1.mx-null                IN  A    172.31.0.23
 ; dashboard MX row E ("no Null-MX/real-MX conflict") FAILs for it.
 mx-null-conflict           IN  NS   ns1.mx-null-conflict.demo.
 ns1.mx-null-conflict       IN  A    172.31.0.26
+
+; email-*.demo. — Tier-1 email-auth demos (spec 009). Each is a single
+; in-zone NS; the auth servers publish SPF/DMARC TXT records exercising
+; every "Email auth — status" state. No NS-glue games here — any free IP.
+email-healthy              IN  NS   ns1.email-healthy.demo.
+ns1.email-healthy          IN  A    172.31.0.30
+email-spf-only             IN  NS   ns1.email-spf-only.demo.
+ns1.email-spf-only         IN  A    172.31.0.31
+email-none                 IN  NS   ns1.email-none.demo.
+ns1.email-none             IN  A    172.31.0.32
+email-permissive           IN  NS   ns1.email-permissive.demo.
+ns1.email-permissive       IN  A    172.31.0.33
+email-broken               IN  NS   ns1.email-broken.demo.
+ns1.email-broken           IN  A    172.31.0.34
+email-nomail               IN  NS   ns1.email-nomail.demo.
+ns1.email-nomail           IN  A    172.31.0.35

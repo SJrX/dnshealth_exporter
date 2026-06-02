@@ -1,0 +1,21 @@
+; email-spf-only.demo. — SPF configured, DMARC missing (spec 009).
+; Demonstrates the partial-adoption state: SPF rows PASS, DMARC
+; -present row WARNs (absent), DMARC-policy row N/A.
+
+$ORIGIN email-spf-only.demo.
+$TTL 30
+
+@   IN  SOA  ns1.email-spf-only.demo. admin.email-spf-only.demo. (
+            2026060101  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.email-spf-only.demo.
+ns1   IN  A    172.31.0.31
+@     IN  A    172.31.0.31
+
+@     IN  TXT  "v=spf1 -all"
+; No _dmarc record — DMARC is absent.

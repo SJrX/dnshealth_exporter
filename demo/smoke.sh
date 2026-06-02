@@ -206,6 +206,28 @@ if grep -E '^dnshealth_ns_glue\{[^}]+\} 1$' "${METRICS_FILE}" \
     fail "ns-ip-mismatch.demo.: self side unexpectedly reports parent glue IP 172.31.0.19 (no divergence to detect)"
 fi
 
+echo "A3f: email-auth SPF + DMARC surfaced per zone (spec 009)"
+# Happy path: email-healthy publishes SPF -all + DMARC p=reject.
+grep -E '^dnshealth_spf_present\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' >/dev/null \
+    || fail "email-healthy.demo.: dnshealth_spf_present not 1"
+grep -E '^dnshealth_spf_terminal_all\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' | grep -F 'qualifier="fail"' >/dev/null \
+    || fail "email-healthy.demo.: SPF terminal qualifier not 'fail' (-all)"
+grep -E '^dnshealth_dmarc_policy\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' | grep -F 'policy="reject"' >/dev/null \
+    || fail "email-healthy.demo.: DMARC policy not 'reject'"
+# Absent: email-none publishes neither — spf_present must be a present 0.
+grep -E '^dnshealth_spf_present\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-none.demo."' >/dev/null \
+    || fail "email-none.demo.: dnshealth_spf_present not zero-emitted as 0"
+# Broken: email-broken has two v=spf1 records (count=2, invalid) + malformed DMARC.
+grep -E '^dnshealth_spf_record_count\{[^}]+\} 2$' "${METRICS_FILE}" | grep -F 'zone="email-broken.demo."' >/dev/null \
+    || fail "email-broken.demo.: dnshealth_spf_record_count not 2"
+grep -E '^dnshealth_spf_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-broken.demo."' >/dev/null \
+    || fail "email-broken.demo.: dnshealth_spf_valid not 0 (multiple records)"
+grep -E '^dnshealth_dmarc_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-broken.demo."' >/dev/null \
+    || fail "email-broken.demo.: dnshealth_dmarc_valid not 0 (malformed, no p=)"
+# MX-independence (FR-017): email-nomail has a Null MX yet PASSes email-auth.
+grep -E '^dnshealth_dmarc_policy\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-nomail.demo."' | grep -F 'policy="reject"' >/dev/null \
+    || fail "email-nomail.demo.: Null-MX zone should still publish DMARC p=reject (FR-017)"
+
 echo "A4: probe cycle ran and produced query counts"
 grep -E '^dnshealth_probe_cycle_duration_seconds [0-9]' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_probe_cycle_duration_seconds not present"

@@ -134,6 +134,22 @@ func CNAME(name, target string) dns.RR {
 	}
 }
 
+// TXT creates a dns.TXT record at name. Pass one string for the common
+// case, or several to model a record split into multiple character-
+// strings (RFC 7208 §3.3 / RFC 7489 §A.5) that a parser must concatenate.
+// Used for SPF (at the zone apex) and DMARC (at `_dmarc.<zone>`).
+func TXT(name string, strings ...string) dns.RR {
+	return &dns.TXT{
+		Hdr: dns.RR_Header{
+			Name:   dns.Fqdn(name),
+			Rrtype: dns.TypeTXT,
+			Class:  dns.ClassINET,
+			Ttl:    300,
+		},
+		Txt: strings,
+	}
+}
+
 // MX creates a dns.MX record for a zone. Preference is the priority
 // (lower = preferred per RFC 5321 §5.1). For Null MX (RFC 7505) use
 // preference 0 and exchange ".".

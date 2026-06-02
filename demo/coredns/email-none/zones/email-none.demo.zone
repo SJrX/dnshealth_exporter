@@ -1,0 +1,22 @@
+; email-none.demo. — no email-auth records at all (spec 009). A common
+; spoofing-exposure state: the domain answers but publishes neither SPF
+; nor DMARC. The present rows read WARN (verify intent — even a non-
+; sending domain should publish v=spf1 -all + p=reject); the qualifier
+; and policy rows read N/A.
+
+$ORIGIN email-none.demo.
+$TTL 30
+
+@   IN  SOA  ns1.email-none.demo. admin.email-none.demo. (
+            2026060101  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.email-none.demo.
+ns1   IN  A    172.31.0.32
+@     IN  A    172.31.0.32
+
+; Deliberately no TXT records — SPF and DMARC both absent.

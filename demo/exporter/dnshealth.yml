@@ -18,6 +18,12 @@ zones:
   - mx-healthy.demo.
   - mx-broken.demo.
   - mx-null.demo.
+  - email-healthy.demo.
+  - email-spf-only.demo.
+  - email-none.demo.
+  - email-permissive.demo.
+  - email-broken.demo.
+  - email-nomail.demo.
 
 # Tighter than the 60s production default so iteration sees changes
 # within ~20 seconds.

@@ -470,3 +470,91 @@ var mxStatusChecks = []statusCheck{
 func mxStatusTable(yOffset uint32) *table.PanelBuilder {
 	return statusTable("MX — status", gridPos(0, subY(25, yOffset), 12, 10), mxStatusChecks)
 }
+
+// Email-auth status checks (spec 009 — SPF + DMARC). Four four-state
+// rows encoding the clarified severity model (Clarifications
+// §2026-05-31): a *broken* record (multiple SPF RRs, or a malformed
+// SPF/DMARC record) reads FAIL; an *absent or weak* policy (no record,
+// or a permissive qualifier/policy) reads WARN; a present-and-safe
+// record reads PASS; rows that don't apply to a zone (the qualifier /
+// policy rows when there is no record) read N/A.
+//
+// MX-INDEPENDENCE (FR-017): these rows apply to every zone regardless of
+// MX / Null MX. SPF and DMARC are anti-spoofing controls — they stop a
+// domain being forged as a SENDER, which is orthogonal to whether the
+// domain RECEIVES mail. A no-mail / Null-MX zone is still a spoofing
+// target and should publish `v=spf1 -all` + DMARC `p=reject`; the detail
+// text spells this out so a no-mail zone's WARN is not mistaken for a
+// contradiction. The DNS-lookup-budget check (RFC 7208 §4.6.4) is
+// deferred to #58 and will add a fifth row.
+//
+// The email_auth prober emits these per-zone gauges with empty
+// nameserver/ip labels (like ProbeMX), so every predicate aggregates
+// `max by (zone)` — same idiom the SOA rows use over `dnshealth_soa_*`.
+var emailAuthStatusChecks = []statusCheck{
+	// Row A never hard-FAILs on absence (that's the WARN below); it FAILs
+	// only on a BROKEN record: more than one v=spf1 RR (RFC 7208 §3.2
+	// PermError) or a single record flagged invalid. hard = NOT broken.
+	{
+		refId:        "A",
+		expr:         `1 - clamp_max((max by (zone) (dnshealth_spf_record_count{zone="$zone"}) > bool 1) + (max by (zone) (dnshealth_spf_present{zone="$zone"}) == bool 1) * (max by (zone) (dnshealth_spf_valid{zone="$zone"}) == bool 0), 1)`,
+		warnExpr:     `max by (zone) (dnshealth_spf_present{zone="$zone"}) == bool 0`,
+		naExpr:       `absent(dnshealth_spf_present{zone="$zone"})`,
+		legendFormat: "Zone publishes a single valid SPF record",
+		detail: "**Metric**: `dnshealth_spf_present` / `dnshealth_spf_record_count` / `dnshealth_spf_valid`  \n" +
+			"**WARN (absent)**: the zone publishes no SPF record. Even a domain that sends no mail should publish `v=spf1 -all` to stop spammers forging it as the sender — SPF protects the domain regardless of whether it receives mail (MX), so this applies to no-mail and Null-MX zones too. Verify intent.  \n" +
+			"**FAIL (broken)**: more than one `v=spf1` record (RFC 7208 §3.2 permanent error) or a malformed record — receivers get a PermError and SPF effectively does not work.  \n" +
+			"**Investigate**: the zone's apex TXT records.",
+	},
+	// Row B never FAILs (no FAIL state in the model); it's PASS for a
+	// restrictive qualifier, WARN for a permissive/neutral/absent
+	// qualifier, N/A when there is no single SPF record to read.
+	{
+		refId:        "B",
+		expr:         `max by (zone) (dnshealth_spf_terminal_all{zone="$zone"})`,
+		warnExpr:     `max by (zone) (dnshealth_spf_terminal_all{zone="$zone",qualifier=~"neutral|none|pass"})`,
+		naExpr:       `absent(dnshealth_spf_terminal_all{zone="$zone"})`,
+		legendFormat: "SPF ends in a restrictive 'all' qualifier",
+		detail: "**Metric**: `dnshealth_spf_terminal_all{qualifier}`  \n" +
+			"**PASS**: the record ends in `-all` (fail) or `~all` (softfail) — unauthorized senders are rejected or marked.  \n" +
+			"**WARN**: `?all` (neutral), no terminal `all`, or `+all` — `+all` is syntactically valid but authorizes ANY sender to spoof the domain, which is reckless; the others assert nothing. Verify intent.  \n" +
+			"**N/A**: the zone has no single SPF record (absent, or multiple records — see the row above).  \n" +
+			"**Investigate**: the apex `v=spf1` record's final mechanism.",
+	},
+	// Row C: FAIL only on a present-but-malformed DMARC record; WARN on
+	// absence; PASS when present and valid.
+	{
+		refId:        "C",
+		expr:         `1 - clamp_max((max by (zone) (dnshealth_dmarc_present{zone="$zone"}) == bool 1) * (max by (zone) (dnshealth_dmarc_valid{zone="$zone"}) == bool 0), 1)`,
+		warnExpr:     `max by (zone) (dnshealth_dmarc_present{zone="$zone"}) == bool 0`,
+		naExpr:       `absent(dnshealth_dmarc_present{zone="$zone"})`,
+		legendFormat: "Zone publishes a valid DMARC record",
+		detail: "**Metric**: `dnshealth_dmarc_present` / `dnshealth_dmarc_valid`  \n" +
+			"**WARN (absent)**: no DMARC record at `_dmarc.<zone>`. DMARC ties SPF/DKIM together with alignment and tells receivers what to do on failure; without it, look-alike spoofing SPF alone can't stop is unmitigated. A no-mail / Null-MX domain still benefits (publish `p=reject`). Verify intent.  \n" +
+			"**FAIL (broken)**: a `v=DMARC1` record with no valid `p=` tag (RFC 7489 §6.3 requires it) — receivers can't apply a policy.  \n" +
+			"**Investigate**: the `_dmarc.<zone>` TXT record.",
+	},
+	// Row D: PASS on enforcing policy, WARN on p=none (monitoring only),
+	// N/A when there is no valid DMARC policy to read.
+	{
+		refId:        "D",
+		expr:         `max by (zone) (dnshealth_dmarc_policy{zone="$zone"})`,
+		warnExpr:     `max by (zone) (dnshealth_dmarc_policy{zone="$zone",policy="none"})`,
+		naExpr:       `absent(dnshealth_dmarc_policy{zone="$zone"})`,
+		legendFormat: "DMARC enforces a policy (quarantine or reject)",
+		detail: "**Metric**: `dnshealth_dmarc_policy{policy}`  \n" +
+			"**PASS**: `p=quarantine` or `p=reject` — the domain enforces alignment, so spoofed mail is quarantined or rejected.  \n" +
+			"**WARN**: `p=none` — DMARC is published but only MONITORS; it does not enforce, so spoofed mail is still delivered. A legitimate rollout stage, but verify it's intended to stay there.  \n" +
+			"**N/A**: the zone has no valid DMARC record (absent or malformed — see the row above).  \n" +
+			"**Investigate**: the `p=` tag of the `_dmarc.<zone>` record.",
+	},
+}
+
+// emailAuthStatustable is the standalone "Email auth — status" panel
+// (spec 009), modeled on mxStatusTable but full-width (w=24) since it has
+// no paired records table. Sits in its own collapsible "Email auth" row
+// below the MX section. Height 8 gives the four rows breathing room at
+// CellHeight=Sm.
+func emailAuthStatusTable(yOffset uint32) *table.PanelBuilder {
+	return statusTable("Email auth — status", gridPos(0, subY(36, yOffset), 24, 8), emailAuthStatusChecks)
+}

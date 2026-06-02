@@ -54,6 +54,16 @@ to appear.
 | `lame-nameserver.demo.` | "Authoritative" server is actually a misconfigured forwarder with no real authoritative chain | SOA check fails (`query_success{check="soa"}=0`) for this zone. (CoreDNS's `forward` plugin does not set RA on referral responses, so the recursion-available metric reads 0 — the dashboard's recursion panel is still useful for real-world deployments where the exporter is pointed at actual recursive resolvers.) |
 | `ns-mismatch.demo.` | Parent advertises 1 NS; the auth server reports 2 different NSs internally | "Parent and self report same NS records" = FAIL. The Parent records table shows the parent's view (1 NS); the per-NS SOA table populates from the self view (2 NSs). |
 | `v6-only.demo.` | Every NS has only an AAAA record (no A) | All per-NS metrics surface with IPv6 addresses in the `ip` label. Pre-spec-006 this zone produced no per-NS series at all. |
+| `email-healthy.demo.` | SPF `-all` + DMARC `p=reject` | "Email auth — status": all four rows PASS |
+| `email-spf-only.demo.` | SPF only, no DMARC | SPF rows PASS; DMARC-present row WARN (absent); DMARC-policy row N/A |
+| `email-none.demo.` | No SPF, no DMARC | Present rows WARN (verify intent); qualifier/policy rows N/A |
+| `email-permissive.demo.` | SPF `+all` + DMARC `p=none` | Present rows PASS; SPF-qualifier and DMARC-policy rows WARN (valid but weak) |
+| `email-broken.demo.` | Two `v=spf1` records + DMARC missing `p=` | SPF-valid and DMARC-valid rows FAIL (broken records); qualifier/policy rows N/A |
+| `email-nomail.demo.` | Null MX **and** SPF `-all` + DMARC `p=reject` | All email-auth rows PASS — proves the rows are MX-independent (anti-spoofing applies even to no-mail domains) |
+
+The **"Email auth — SPF + DMARC"** section (spec 009) surfaces these as
+`dnshealth_spf_*` / `dnshealth_dmarc_*` gauges. The RFC 7208 §4.6.4
+SPF DNS-lookup-budget check is tracked separately as a follow-up (#58).
 
 `healthy.demo.` also doubles as the **dual-stack** demonstration —
 its NSes have both A and AAAA records, so every per-NS metric

@@ -1,0 +1,9 @@
+# Authoritative for email-spf-only.demo. — SPF present (-all) but no
+# DMARC record (spec 009). SPF rows PASS; the DMARC-present row WARNs
+# (absent) and the DMARC-policy row reads N/A.
+
+email-spf-only.demo. {
+    file /zones/email-spf-only.demo.zone
+    log
+    errors
+}

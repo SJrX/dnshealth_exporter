@@ -24,6 +24,8 @@ zones:
   - email-permissive.demo.
   - email-broken.demo.
   - email-nomail.demo.
+  - email-toomanylookups.demo.
+  - email-spf-incomplete.demo.
 
 # Tighter than the 60s production default so iteration sees changes
 # within ~20 seconds.

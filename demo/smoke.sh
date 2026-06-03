@@ -228,6 +228,22 @@ grep -E '^dnshealth_dmarc_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="
 grep -E '^dnshealth_dmarc_policy\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-nomail.demo."' | grep -F 'policy="reject"' >/dev/null \
     || fail "email-nomail.demo.: Null-MX zone should still publish DMARC p=reject (FR-017)"
 
+echo "A3g: SPF DNS-lookup budget (RFC 7208 §4.6.4, spec 010)"
+# Over budget: email-toomanylookups chains include: past 10 → exceeded=1, count=11.
+grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-toomanylookups.demo."' >/dev/null \
+    || fail "email-toomanylookups.demo.: dnshealth_spf_lookup_budget_exceeded not 1 (should be over budget)"
+grep -E '^dnshealth_spf_lookup_count\{[^}]+\} 11$' "${METRICS_FILE}" | grep -F 'zone="email-toomanylookups.demo."' >/dev/null \
+    || fail "email-toomanylookups.demo.: dnshealth_spf_lookup_count not 11 (≥11 stop semantics)"
+# In budget: email-healthy (v=spf1 -all, 0 lookups) → not exceeded.
+grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' >/dev/null \
+    || fail "email-healthy.demo.: dnshealth_spf_lookup_budget_exceeded not 0 (should be in budget)"
+# Graceful degradation (US2): email-spf-incomplete has an unresolvable
+# include → eval_complete=0 but still NOT over budget (no false FAIL).
+grep -E '^dnshealth_spf_lookup_eval_complete\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-spf-incomplete.demo."' >/dev/null \
+    || fail "email-spf-incomplete.demo.: dnshealth_spf_lookup_eval_complete not 0 (unresolvable include)"
+grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-spf-incomplete.demo."' >/dev/null \
+    || fail "email-spf-incomplete.demo.: unreachable include must not raise a false over-budget FAIL (budget_exceeded should be 0)"
+
 echo "A4: probe cycle ran and produced query counts"
 grep -E '^dnshealth_probe_cycle_duration_seconds [0-9]' "${METRICS_FILE}" >/dev/null \
     || fail "dnshealth_probe_cycle_duration_seconds not present"

@@ -69,6 +69,8 @@ var demoZones = []string{
 	"email-permissive.demo.",
 	"email-broken.demo.",
 	"email-nomail.demo.",
+	"email-toomanylookups.demo.",
+	"email-spf-incomplete.demo.",
 }
 
 // stateName maps the four-state numeric value to its label.
@@ -218,6 +220,22 @@ var expectations = map[string]string{
 	"email_auth/B/healthy.demo.": "N/A",
 	"email_auth/C/healthy.demo.": "WARN",
 	"email_auth/D/healthy.demo.": "N/A",
+
+	// SPF lookup-budget row (spec 010), refId E.
+	// email-toomanylookups — chained includes >10 → FAIL.
+	"email_auth/E/email-toomanylookups.demo.": "FAIL",
+	// Zones with a single valid SPF and few/no lookups → PASS.
+	"email_auth/E/email-healthy.demo.":     "PASS",
+	"email_auth/E/email-spf-only.demo.":    "PASS",
+	"email_auth/E/email-permissive.demo.":  "PASS",
+	"email_auth/E/email-nomail.demo.":      "PASS",
+	// email-spf-incomplete — unresolvable include: under budget, so PASS,
+	// even though eval_complete=0 (US2: no false FAIL on a flaky include).
+	"email_auth/E/email-spf-incomplete.demo.": "PASS",
+	// No single valid SPF record → N/A (gauge not emitted).
+	"email_auth/E/email-none.demo.":   "N/A",
+	"email_auth/E/email-broken.demo.": "N/A",
+	"email_auth/E/healthy.demo.":      "N/A",
 }
 
 // TestDashboardPromQLPredicates is the live PromQL evaluation gate.

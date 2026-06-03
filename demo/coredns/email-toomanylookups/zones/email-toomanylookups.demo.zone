@@ -1,0 +1,30 @@
+; email-toomanylookups.demo. — SPF that blows the RFC 7208 §4.6.4
+; ten-lookup budget (spec 010). The apex record itself looks fine, but
+; recursively it needs: 3 include lookups + (_a: a mx a mx = 4) + (_b: a
+; mx a mx = 4) + (_c: a mx = 2) = 13 lookups. The exporter stops counting
+; the instant it passes 10 and reports 11 ("≥11") → the budget row FAILs.
+; The include targets are in-zone, so the recursive resolver reaches them
+; from the in-stack fake root with no internet.
+
+$ORIGIN email-toomanylookups.demo.
+$TTL 30
+
+@   IN  SOA  ns1.email-toomanylookups.demo. admin.email-toomanylookups.demo. (
+            2026060201  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.email-toomanylookups.demo.
+ns1     IN  A    172.31.0.36
+@       IN  A    172.31.0.36
+
+; Apex SPF — three includes, terminal -all. Single, valid record.
+@       IN  TXT  "v=spf1 include:_a.email-toomanylookups.demo. include:_b.email-toomanylookups.demo. include:_c.email-toomanylookups.demo. -all"
+
+; Included sub-records — a/mx mechanisms each cost one lookup.
+_a      IN  TXT  "v=spf1 a mx a mx -all"
+_b      IN  TXT  "v=spf1 a mx a mx -all"
+_c      IN  TXT  "v=spf1 a mx -all"

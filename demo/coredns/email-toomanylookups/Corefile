@@ -1,0 +1,12 @@
+# Authoritative for email-toomanylookups.demo. — SPF over the RFC 7208
+# §4.6.4 ten-lookup budget (spec 010 / #58). The apex SPF chains three
+# include: to in-zone sub-records (_a/_b/_c) whose a/mx mechanisms push
+# the recursive lookup count past 10. The exporter resolves the includes
+# from the in-stack root and the "SPF within the 10-lookup budget" row
+# reads FAIL (count 11, "≥11").
+
+email-toomanylookups.demo. {
+    file /zones/email-toomanylookups.demo.zone
+    log
+    errors
+}

@@ -55,6 +55,30 @@ func ProbeEmailAuth(ctx context.Context, zone string, nameservers []Nameserver, 
 				Labels:  map[string]string{"qualifier": spf.qualifier},
 			})
 		}
+		// SPF DNS-lookup budget (RFC 7208 §4.6.4, spec 010) — only for a
+		// single valid record. The fetch closure carries ctx, so the
+		// recursive walk respects the per-zone deadline; a/mx/ptr/exists
+		// are counted syntactically, only include/redirect are resolved.
+		if spf.present && spf.recordCount == 1 && spf.valid {
+			fetch := func(target string) (string, bool) {
+				return resolveSPFRecord(ctx, target, client, logger)
+			}
+			count, complete := countSPFLookups(spf.raw, fetch)
+			exceeded := 0.0
+			if count > spfMaxLookups {
+				exceeded = 1
+			}
+			results = append(results, ProbeResult{
+				Zone:    zone,
+				Check:   "email_auth",
+				Success: true,
+				Metrics: map[string]float64{
+					"spf_lookup_count":           float64(count),
+					"spf_lookup_budget_exceeded": exceeded,
+					"spf_lookup_eval_complete":   boolToFloat(complete),
+				},
+			})
+		}
 	} else {
 		logger.Warn("email_auth: SPF TXT query failed on all nameservers", "zone", zone)
 	}

@@ -1,0 +1,12 @@
+# Authoritative for email-spf-incomplete.demo. — exercises the SPF
+# lookup-budget graceful-degradation path (spec 010 US2). The apex SPF
+# include:s a sub-name that does NOT exist, so the recursive walk can't
+# resolve it: dnshealth_spf_lookup_eval_complete reads 0 (the count is a
+# lower bound) and the budget row stays PASS — a transient/unresolvable
+# include never produces a false over-budget FAIL.
+
+email-spf-incomplete.demo. {
+    file /zones/email-spf-incomplete.demo.zone
+    log
+    errors
+}

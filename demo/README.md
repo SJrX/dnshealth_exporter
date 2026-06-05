@@ -60,10 +60,14 @@ to appear.
 | `email-permissive.demo.` | SPF `+all` + DMARC `p=none` | Present rows PASS; SPF-qualifier and DMARC-policy rows WARN (valid but weak) |
 | `email-broken.demo.` | Two `v=spf1` records + DMARC missing `p=` | SPF-valid and DMARC-valid rows FAIL (broken records); qualifier/policy rows N/A |
 | `email-nomail.demo.` | Null MX **and** SPF `-all` + DMARC `p=reject` | All email-auth rows PASS — proves the rows are MX-independent (anti-spoofing applies even to no-mail domains) |
+| `email-toomanylookups.demo.` | SPF chains `include:` past the RFC 7208 §4.6.4 ten-lookup limit | "SPF within the 10-lookup budget" row FAILs; `dnshealth_spf_lookup_count`=11 ("≥11") |
+| `email-spf-incomplete.demo.` | SPF `include:`s an unresolvable name | Budget row stays PASS while `dnshealth_spf_lookup_eval_complete`=0 — a flaky/unreachable include never triggers a false over-budget FAIL (spec 010 US2) |
 
-The **"Email auth — SPF + DMARC"** section (spec 009) surfaces these as
-`dnshealth_spf_*` / `dnshealth_dmarc_*` gauges. The RFC 7208 §4.6.4
-SPF DNS-lookup-budget check is tracked separately as a follow-up (#58).
+The **"Email auth — SPF + DMARC"** section surfaces these as
+`dnshealth_spf_*` / `dnshealth_dmarc_*` gauges. Spec 010 adds the RFC 7208
+§4.6.4 SPF DNS-lookup-budget row (`dnshealth_spf_lookup_count` /
+`_budget_exceeded` / `_eval_complete`); the §4.6.4 void-lookup cap remains
+a future follow-up.
 
 `healthy.demo.` also doubles as the **dual-stack** demonstration —
 its NSes have both A and AAAA records, so every per-NS metric

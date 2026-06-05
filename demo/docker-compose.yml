@@ -347,6 +347,33 @@ services:
           - ns1.email-nomail.demo.
     restart: unless-stopped
 
+  # SPF lookup-budget demos (spec 010 / #58).
+  coredns-email-toomanylookups:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-toomanylookups/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-toomanylookups/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.36
+        aliases:
+          - ns1.email-toomanylookups.demo.
+    restart: unless-stopped
+
+  coredns-email-spf-incomplete:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/email-spf-incomplete/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-spf-incomplete/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.37
+        aliases:
+          - ns1.email-spf-incomplete.demo.
+    restart: unless-stopped
+
   # Authoritative for mx-healthy.demo. — spec 008 MX-prober happy
   # path. Two MXes at priorities 10 + 20, both targets in-zone and
   # resolvable, neither CNAMEd.
@@ -415,6 +442,8 @@ services:
       - coredns-email-permissive
       - coredns-email-broken
       - coredns-email-nomail
+      - coredns-email-toomanylookups
+      - coredns-email-spf-incomplete
     restart: unless-stopped
 
   prometheus:

@@ -164,3 +164,12 @@ email-broken               IN  NS   ns1.email-broken.demo.
 ns1.email-broken           IN  A    172.31.0.34
 email-nomail               IN  NS   ns1.email-nomail.demo.
 ns1.email-nomail           IN  A    172.31.0.35
+
+; SPF lookup-budget demos (spec 010 / #58). email-toomanylookups chains
+; include: past the RFC 7208 §4.6.4 limit; email-spf-incomplete has an
+; unresolvable include (graceful-degradation). The recursive SPF resolver
+; reaches their in-zone include targets by walking from this fake root.
+email-toomanylookups       IN  NS   ns1.email-toomanylookups.demo.
+ns1.email-toomanylookups   IN  A    172.31.0.36
+email-spf-incomplete       IN  NS   ns1.email-spf-incomplete.demo.
+ns1.email-spf-incomplete   IN  A    172.31.0.37

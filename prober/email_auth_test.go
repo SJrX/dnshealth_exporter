@@ -226,3 +226,144 @@ func TestEmailAuth_MultiStringSPF(t *testing.T) {
 	AssertGauge(t, metrics, "dnshealth_spf_terminal_all",
 		WithLabels("zone", "example.test", "qualifier", "fail"), WithValue(1))
 }
+
+// TestEmailAuth_LookupBudget_OverBudget — apex SPF chains include: to
+// in-zone sub-records totalling >10 lookups (spec 010 US1). The walk
+// resolves them from root, reaches 11, and stops.
+func TestEmailAuth_LookupBudget_OverBudget(t *testing.T) {
+	// Fixture Setup
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			TXT("example.test", "v=spf1 include:_a.example.test include:_b.example.test include:_c.example.test -all"),
+			TXT("_a.example.test", "v=spf1 a mx a mx -all"), // 4
+			TXT("_b.example.test", "v=spf1 a mx a mx -all"), // 4
+			TXT("_c.example.test", "v=spf1 a mx -all"),      // 2
+		).
+		Start(t)
+	defer env.Stop()
+
+	// Exercise SUT
+	metrics := env.Probe(prober.ProbeEmailAuth, "example.test")
+
+	// Verification — 3 includes + 4 + 4 = 11 (stop), exceeded, complete.
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_count", WithLabels("zone", "example.test"), WithValue(11))
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_budget_exceeded", WithLabels("zone", "example.test"), WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_eval_complete", WithLabels("zone", "example.test"), WithValue(1))
+}
+
+// TestEmailAuth_LookupBudget_InBudget — a single valid SPF record with no
+// lookup mechanisms reads count 0, not exceeded. No-SPF / multiple-SPF
+// zones emit no lookup gauges (→ dashboard N/A).
+func TestEmailAuth_LookupBudget_InBudget(t *testing.T) {
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			TXT("example.test", "v=spf1 -all"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	metrics := env.Probe(prober.ProbeEmailAuth, "example.test")
+
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_count", WithLabels("zone", "example.test"), WithValue(0))
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_budget_exceeded", WithLabels("zone", "example.test"), WithValue(0))
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_eval_complete", WithLabels("zone", "example.test"), WithValue(1))
+}
+
+// TestEmailAuth_LookupBudget_NoSPF — a zone with no SPF record emits NO
+// lookup gauges (dashboard reads N/A via absent()).
+func TestEmailAuth_LookupBudget_NoSPF(t *testing.T) {
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	metrics := env.Probe(prober.ProbeEmailAuth, "example.test")
+
+	AssertGaugeMissing(t, metrics, "dnshealth_spf_lookup_count", WithLabels("zone", "example.test"))
+	AssertGaugeMissing(t, metrics, "dnshealth_spf_lookup_budget_exceeded", WithLabels("zone", "example.test"))
+}
+
+// TestEmailAuth_LookupBudget_UnreachableInclude (T013a / US2) — an
+// include: to a name with no SPF record sets eval_complete=0 and does
+// NOT report over budget (no false FAIL from an unresolvable include).
+func TestEmailAuth_LookupBudget_UnreachableInclude(t *testing.T) {
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			// _missing.example.test is NOT served → resolves to no SPF.
+			TXT("example.test", "v=spf1 include:_missing.example.test a -all"),
+		).
+		Start(t)
+	defer env.Stop()
+
+	metrics := env.Probe(prober.ProbeEmailAuth, "example.test")
+
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_eval_complete", WithLabels("zone", "example.test"), WithValue(0))
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_budget_exceeded", WithLabels("zone", "example.test"), WithValue(0))
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_count", WithLabels("zone", "example.test"), WithValue(2)) // include(1) + a(1)
+}
+
+// TestEmailAuth_LookupBudget_SlowIncludeBounded (T013b / FR-006 / SC-004)
+// — an include: to a target whose authoritative server never answers
+// (Drop) must not hang the probe or raise a false FAIL: the query times
+// out, the resolver gives up, eval_complete=0, budget_exceeded=0. The
+// main zone answers normally, so the apex SPF still resolves.
+func TestEmailAuth_LookupBudget_SlowIncludeBounded(t *testing.T) {
+	env := NewDNSFixture(t).
+		ReferralServer("127.240.0.1:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			// Delegate a second zone whose auth server drops everything.
+			NS("dropzone.test", "ns1.dropzone.test"),
+			A("ns1.dropzone.test", "127.240.0.3"),
+		).
+		Server("127.240.0.2:"+TestPort,
+			SOA("example.test"),
+			NS("example.test", "ns1.example.test"),
+			A("ns1.example.test", "127.240.0.2"),
+			TXT("example.test", "v=spf1 include:_x.dropzone.test a -all"),
+		).
+		ServerWithOptions("127.240.0.3:"+TestPort, ServerOptions{Drop: true}).
+		Start(t)
+	defer env.Stop()
+
+	metrics := env.Probe(prober.ProbeEmailAuth, "example.test")
+
+	// The probe returned (did not hang); the unreachable include is a
+	// lower-bound caveat, not a FAIL.
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_eval_complete", WithLabels("zone", "example.test"), WithValue(0))
+	AssertGauge(t, metrics, "dnshealth_spf_lookup_budget_exceeded", WithLabels("zone", "example.test"), WithValue(0))
+}

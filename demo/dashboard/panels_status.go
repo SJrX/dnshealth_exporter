@@ -521,6 +521,23 @@ var emailAuthStatusChecks = []statusCheck{
 			"**N/A**: the zone has no single SPF record (absent, or multiple records — see the row above).  \n" +
 			"**Investigate**: the apex `v=spf1` record's final mechanism.",
 	},
+	// SPF lookup-budget row (spec 010 / #58). Rendered here in the SPF
+	// group, but carries refId "E" (not "C") so the DMARC rows below keep
+	// their existing refIds and promql_live pins — no renumbering. Binary
+	// FAIL/PASS + N/A (no WARN): FAIL when over budget, N/A when there is
+	// no single valid SPF record (the gauge isn't emitted → absent()).
+	{
+		refId:        "E",
+		expr:         `max by (zone) (dnshealth_spf_lookup_budget_exceeded{zone="$zone"}) == bool 0`,
+		naExpr:       `absent(dnshealth_spf_lookup_budget_exceeded{zone="$zone"})`,
+		legendFormat: "SPF within the 10-lookup budget (RFC 7208 §4.6.4)",
+		detail: "**Metric**: `dnshealth_spf_lookup_budget_exceeded` / `dnshealth_spf_lookup_count`  \n" +
+			"**Why FAIL matters**: the SPF record requires more than 10 DNS lookups to evaluate (counting recursively through every `include:`/`redirect=`). Receiving mail servers return **PermError** per RFC 7208 §4.6.4 and SPF silently stops working — even though the record looks fine by eye. The offending lookups are usually buried inside third-party `include:` records.  \n" +
+			"**Count semantics**: `dnshealth_spf_lookup_count` is exact for 0–10; an over-budget record reads **11 (\"≥11\")** — the walk stops the instant it knows it's over.  \n" +
+			"**Trust**: a FAIL fires only on a *resolved* over-budget count. If a third-party include is briefly unreachable this cycle, the row stays PASS and `dnshealth_spf_lookup_eval_complete` reads 0 (the count is a lower bound) — no false alarm from a flaky include.  \n" +
+			"**N/A**: the zone has no single valid SPF record (absent / multiple / malformed — see the rows above).  \n" +
+			"**Investigate**: expand the apex `include:` tree; trim or flatten third-party includes.",
+	},
 	// Row C: FAIL only on a present-but-malformed DMARC record; WARN on
 	// absence; PASS when present and valid.
 	{

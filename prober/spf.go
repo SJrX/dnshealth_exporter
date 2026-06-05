@@ -13,6 +13,7 @@ type spfResult struct {
 	recordCount int    // number of v=spf1 records (>1 ⇒ RFC 7208 §3.2 PermError)
 	valid       bool   // exactly one record that parsed without malformation
 	qualifier   string // terminal `all` qualifier: fail/softfail/neutral/pass/none
+	raw         string // the single record string (set only when present ∧ recordCount==1)
 }
 
 // analyzeSPF selects the v=spf1 record(s) from the per-RR TXT strings at
@@ -42,9 +43,78 @@ func analyzeSPF(records []string) spfResult {
 	}
 
 	rec := spf[0]
+	res.raw = rec
 	res.valid = !spfMalformed(rec)
 	res.qualifier = terminalAllQualifier(rec)
 	return res
+}
+
+// spfMechKind classifies an SPF term for lookup-budget counting
+// (RFC 7208 §4.6.4). The six lookup-incurring kinds are include / a / mx
+// / ptr / exists / redirect; only include and redirect pull in a further
+// SPF record (and therefore recurse). `all` and everything else
+// (ip4/ip6/exp/unknown) cost zero lookups.
+type spfMechKind int
+
+const (
+	mechOther spfMechKind = iota
+	mechAll
+	mechInclude
+	mechRedirect
+	mechA
+	mechMX
+	mechPTR
+	mechExists
+)
+
+// spfMechanism is one classified term of an SPF record.
+type spfMechanism struct {
+	kind     spfMechKind
+	target   string // name after include: / redirect= (empty otherwise)
+	hasMacro bool   // target embeds a %{...} macro (unresolvable without sender context)
+}
+
+// parseSPFMechanisms tokenizes an SPF record into classified mechanisms
+// and reports whether the record has an `all` mechanism (so the counter
+// can apply the redirect-precedence rule: redirect is consulted only when
+// there is no `all`, RFC 7208 §6.1). Pure string work — no DNS.
+func parseSPFMechanisms(record string) (mechs []spfMechanism, hasAll bool) {
+	for _, f := range strings.Fields(record) {
+		if strings.EqualFold(f, "v=spf1") {
+			continue
+		}
+		// Strip a leading qualifier (+ - ~ ?) — applies to mechanisms,
+		// not to the `redirect=`/`exp=` modifiers (which never start with
+		// a qualifier char, so this leaves them untouched).
+		body := f
+		if strings.ContainsRune("+-~?", rune(body[0])) {
+			body = body[1:]
+		}
+		lower := strings.ToLower(body)
+		switch {
+		case lower == "all":
+			hasAll = true
+			mechs = append(mechs, spfMechanism{kind: mechAll})
+		case strings.HasPrefix(lower, "include:"):
+			target := body[len("include:"):]
+			mechs = append(mechs, spfMechanism{kind: mechInclude, target: target, hasMacro: strings.Contains(target, "%{")})
+		case strings.HasPrefix(lower, "redirect="):
+			target := body[len("redirect="):]
+			mechs = append(mechs, spfMechanism{kind: mechRedirect, target: target, hasMacro: strings.Contains(target, "%{")})
+		case lower == "a" || strings.HasPrefix(lower, "a:") || strings.HasPrefix(lower, "a/"):
+			mechs = append(mechs, spfMechanism{kind: mechA})
+		case lower == "mx" || strings.HasPrefix(lower, "mx:") || strings.HasPrefix(lower, "mx/"):
+			mechs = append(mechs, spfMechanism{kind: mechMX})
+		case lower == "ptr" || strings.HasPrefix(lower, "ptr:"):
+			mechs = append(mechs, spfMechanism{kind: mechPTR})
+		case strings.HasPrefix(lower, "exists:"):
+			mechs = append(mechs, spfMechanism{kind: mechExists})
+		default:
+			// ip4: / ip6: / exp= / unknown — zero lookups.
+			mechs = append(mechs, spfMechanism{kind: mechOther})
+		}
+	}
+	return mechs, hasAll
 }
 
 // isSPFRecord reports whether a TXT record is an SPF record: it begins

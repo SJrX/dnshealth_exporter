@@ -71,7 +71,8 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 	b = b.WithRow(dashboard.NewRowBuilder("Email auth — SPF + DMARC").
 		Collapsed(false).
 		GridPos(dashboard.GridPos{X: 0, Y: subY(35, yOffset), W: 24, H: 1}).
-		WithPanel(emailAuthStatusTable(yOffset)))
+		WithPanel(emailAuthStatusTable(yOffset)).
+		WithPanel(emailAuthRecordsTable(yOffset)))
 
 	// Operator row — collapsed by default; contains four timeseries.
 	// Shifted down to Y=45 to make room for the email-auth section

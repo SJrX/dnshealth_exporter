@@ -317,3 +317,80 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 		}).
 		SortBy(sortByAsc("Priority"))
 }
+
+// emailAuthRecordsTable shows the raw SPF + DMARC each zone actually
+// publishes, alongside the derived facts (SPF qualifier + lookup count,
+// DMARC policy) — the "what are we looking at" companion to the email-
+// auth status panel (spec 009/010). Unlike the other records tables this
+// is NOT $zone-filtered: email-auth is one SPF + one DMARC per zone, so a
+// one-row-per-zone overview across ALL zones is more useful than a
+// single-zone drill-in. Zones that publish neither record simply don't
+// appear (outer join over the per-zone info gauges). The raw records are
+// carried as label values on dnshealth_spf_record / dnshealth_dmarc_record
+// (one bounded, stable series per zone).
+func emailAuthRecordsTable(yOffset uint32) *table.PanelBuilder {
+	return table.NewPanelBuilder().
+		Title("Email auth records — per zone").
+		Description(`The actual SPF and DMARC records each monitored zone publishes, with the derived signals the status rows evaluate: SPF terminal 'all' qualifier and recursive DNS-lookup count (RFC 7208 §4.6.4; 11 means "≥11"), and the DMARC policy. Raw records come from dnshealth_spf_record / dnshealth_dmarc_record info gauges. Zones publishing neither SPF nor DMARC are omitted.`).
+		GridPos(gridPos(12, subY(36, yOffset), 12, 8)).
+		Datasource(prometheusDS).
+		ShowHeader(true).
+		CellHeight(common.TableCellHeightSm).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("A").
+			Expr(`dnshealth_spf_record`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("B").
+			Expr(`dnshealth_dmarc_record`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("C").
+			Expr(`dnshealth_spf_terminal_all`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("D").
+			Expr(`dnshealth_spf_lookup_count`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("E").
+			Expr(`dnshealth_dmarc_policy`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTransformation(JoinByField(JoinByFieldOptions{
+			ByField: "zone",
+			Mode:    "outer",
+		})).
+		WithTransformation(Organize(OrganizeOptions{
+			RenameByName: map[string]string{
+				"zone":      "Zone",
+				"record 1":  "SPF record",   // query A = dnshealth_spf_record
+				"record 2":  "DMARC record", // query B = dnshealth_dmarc_record
+				"qualifier": "SPF all",      // query C
+				"Value #D":  "SPF lookups",  // query D = lookup count
+				"policy":    "DMARC policy", // query E
+			},
+			IndexByName: map[string]int{
+				"zone":      0,
+				"record 1":  1,
+				"qualifier": 2,
+				"Value #D":  3,
+				"record 2":  4,
+				"policy":    5,
+			},
+			ExcludeByName: map[string]bool{
+				"Time 1": true, "Time 2": true, "Time 3": true, "Time 4": true, "Time 5": true,
+				"nameserver 1": true, "nameserver 2": true, "nameserver 3": true, "nameserver 4": true, "nameserver 5": true,
+				"ip 1": true, "ip 2": true, "ip 3": true, "ip 4": true, "ip 5": true,
+				"__name__ 1": true, "__name__ 2": true, "__name__ 3": true, "__name__ 4": true, "__name__ 5": true,
+				"instance 1": true, "instance 2": true, "instance 3": true, "instance 4": true, "instance 5": true,
+				"job 1": true, "job 2": true, "job 3": true, "job 4": true, "job 5": true,
+				// keep only Value #D (SPF lookups); the others are info-gauge 1s.
+				"Value #A": true, "Value #B": true, "Value #C": true, "Value #E": true,
+			},
+		})).
+		OverrideByName("SPF all", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 90},
+		}).
+		OverrideByName("SPF lookups", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 100},
+		}).
+		OverrideByName("DMARC policy", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 120},
+		}).
+		SortBy(sortByAsc("Zone"))
+}

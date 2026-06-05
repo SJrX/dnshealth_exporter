@@ -44,6 +44,11 @@ func TestEmailAuth_HealthySPFandDMARC(t *testing.T) {
 	AssertGauge(t, metrics, "dnshealth_dmarc_policy",
 		WithLabels("zone", "example.test", "policy", "reject"), WithValue(1))
 	AssertGauge(t, metrics, "dnshealth_dmarc_rua_present", WithLabels("zone", "example.test"), WithValue(1))
+	// Raw-record info gauges (records table) carry the literal record text.
+	AssertGauge(t, metrics, "dnshealth_spf_record",
+		WithLabels("zone", "example.test", "record", "v=spf1 include:_spf.example.net -all"), WithValue(1))
+	AssertGauge(t, metrics, "dnshealth_dmarc_record",
+		WithLabels("zone", "example.test", "record", "v=DMARC1; p=reject; rua=mailto:dmarc@example.test"), WithValue(1))
 }
 
 // TestEmailAuth_NoRecords — a zone publishing neither SPF nor DMARC. The

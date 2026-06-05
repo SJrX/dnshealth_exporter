@@ -1541,7 +1541,7 @@
           },
           "gridPos": {
             "h": 8,
-            "w": 24,
+            "w": 12,
             "x": 0,
             "y": 36
           },
@@ -1630,6 +1630,183 @@
                   {
                     "id": "custom.width",
                     "value": 80
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "targets": [
+            {
+              "expr": "dnshealth_spf_record",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "A"
+            },
+            {
+              "expr": "dnshealth_dmarc_record",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "B"
+            },
+            {
+              "expr": "dnshealth_spf_terminal_all",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "C"
+            },
+            {
+              "expr": "dnshealth_spf_lookup_count",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "D"
+            },
+            {
+              "expr": "dnshealth_dmarc_policy",
+              "instant": true,
+              "range": false,
+              "format": "table",
+              "refId": "E"
+            }
+          ],
+          "title": "Email auth records — per zone",
+          "description": "The actual SPF and DMARC records each monitored zone publishes, with the derived signals the status rows evaluate: SPF terminal 'all' qualifier and recursive DNS-lookup count (RFC 7208 §4.6.4; 11 means \"≥11\"), and the DMARC policy. Raw records come from dnshealth_spf_record / dnshealth_dmarc_record info gauges. Zones publishing neither SPF nor DMARC are omitted.",
+          "transparent": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 36
+          },
+          "repeatDirection": "h",
+          "transformations": [
+            {
+              "id": "joinByField",
+              "options": {
+                "byField": "zone",
+                "mode": "outer"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Value #D": "SPF lookups",
+                  "policy": "DMARC policy",
+                  "qualifier": "SPF all",
+                  "record 1": "SPF record",
+                  "record 2": "DMARC record",
+                  "zone": "Zone"
+                },
+                "indexByName": {
+                  "Value #D": 3,
+                  "policy": 5,
+                  "qualifier": 2,
+                  "record 1": 1,
+                  "record 2": 4,
+                  "zone": 0
+                },
+                "excludeByName": {
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "Time 4": true,
+                  "Time 5": true,
+                  "Value #A": true,
+                  "Value #B": true,
+                  "Value #C": true,
+                  "Value #E": true,
+                  "__name__ 1": true,
+                  "__name__ 2": true,
+                  "__name__ 3": true,
+                  "__name__ 4": true,
+                  "__name__ 5": true,
+                  "instance 1": true,
+                  "instance 2": true,
+                  "instance 3": true,
+                  "instance 4": true,
+                  "instance 5": true,
+                  "ip 1": true,
+                  "ip 2": true,
+                  "ip 3": true,
+                  "ip 4": true,
+                  "ip 5": true,
+                  "job 1": true,
+                  "job 2": true,
+                  "job 3": true,
+                  "job 4": true,
+                  "job 5": true,
+                  "nameserver 1": true,
+                  "nameserver 2": true,
+                  "nameserver 3": true,
+                  "nameserver 4": true,
+                  "nameserver 5": true
+                }
+              }
+            }
+          ],
+          "options": {
+            "frameIndex": 0,
+            "showHeader": true,
+            "showTypeIcons": false,
+            "sortBy": [
+              {
+                "displayName": "Zone"
+              }
+            ],
+            "footer": {
+              "show": false,
+              "reducer": null,
+              "countRows": false
+            },
+            "cellHeight": "sm"
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "SPF all"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "SPF lookups"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "DMARC policy"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 120
                   }
                 ]
               }

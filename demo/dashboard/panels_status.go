@@ -573,5 +573,8 @@ var emailAuthStatusChecks = []statusCheck{
 // below the MX section. Height 8 gives the four rows breathing room at
 // CellHeight=Sm.
 func emailAuthStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("Email auth — status", gridPos(0, subY(36, yOffset), 24, 8), emailAuthStatusChecks)
+	// Left half (w=12) of the email-auth section row, paired with
+	// emailAuthRecordsTable (the raw SPF/DMARC each zone publishes) on
+	// the right — mirrors the MX status+records pairing.
+	return statusTable("Email auth — status", gridPos(0, subY(36, yOffset), 12, 8), emailAuthStatusChecks)
 }

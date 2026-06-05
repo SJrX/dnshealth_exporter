@@ -227,6 +227,11 @@ grep -E '^dnshealth_dmarc_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="
 # MX-independence (FR-017): email-nomail has a Null MX yet PASSes email-auth.
 grep -E '^dnshealth_dmarc_policy\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-nomail.demo."' | grep -F 'policy="reject"' >/dev/null \
     || fail "email-nomail.demo.: Null-MX zone should still publish DMARC p=reject (FR-017)"
+# Raw-record info gauges feed the "Email auth records — per zone" table.
+grep -E '^dnshealth_spf_record\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' | grep -F 'record="v=spf1 -all"' >/dev/null \
+    || fail "email-healthy.demo.: dnshealth_spf_record not carrying the raw SPF record"
+grep -E '^dnshealth_dmarc_record\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' | grep -F 'v=DMARC1; p=reject' >/dev/null \
+    || fail "email-healthy.demo.: dnshealth_dmarc_record not carrying the raw DMARC record"
 
 echo "A3g: SPF DNS-lookup budget (RFC 7208 §4.6.4, spec 010)"
 # Over budget: email-toomanylookups chains include: past 10 → exceeded=1, count=11.

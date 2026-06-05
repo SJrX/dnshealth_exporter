@@ -54,6 +54,16 @@ func ProbeEmailAuth(ctx context.Context, zone string, nameservers []Nameserver, 
 				Metrics: map[string]float64{"spf_terminal_all": 1},
 				Labels:  map[string]string{"qualifier": spf.qualifier},
 			})
+			// Info gauge carrying the raw SPF record as a label, so the
+			// dashboard records table can show what the zone actually
+			// publishes (one series per zone, bounded + stable string).
+			results = append(results, ProbeResult{
+				Zone:    zone,
+				Check:   "email_auth",
+				Success: true,
+				Metrics: map[string]float64{"spf_record": 1},
+				Labels:  map[string]string{"record": spf.raw},
+			})
 		}
 		// SPF DNS-lookup budget (RFC 7208 §4.6.4, spec 010) — only for a
 		// single valid record. The fetch closure carries ctx, so the
@@ -107,6 +117,18 @@ func ProbeEmailAuth(ctx context.Context, zone string, nameservers []Nameserver, 
 				Success: true,
 				Metrics: map[string]float64{"dmarc_policy": 1},
 				Labels:  map[string]string{"policy": dmarc.policy},
+			})
+		}
+		// Info gauge carrying the raw DMARC record as a label (for the
+		// records table) — emitted whenever a v=DMARC1 record is present,
+		// including the malformed (no-p=) case so the operator can see it.
+		if dmarc.present {
+			results = append(results, ProbeResult{
+				Zone:    zone,
+				Check:   "email_auth",
+				Success: true,
+				Metrics: map[string]float64{"dmarc_record": 1},
+				Labels:  map[string]string{"record": dmarc.raw},
 			})
 		}
 		if dmarc.subdomainPolicy != "" {

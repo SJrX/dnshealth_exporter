@@ -13,6 +13,7 @@ type dmarcResult struct {
 	subdomainPolicy string // sp= value if present
 	rua             bool   // a rua= (aggregate reporting) tag is present
 	ruf             bool   // a ruf= (forensic reporting) tag is present
+	raw             string // the record string (set when present) — for the records table
 }
 
 // analyzeDMARC selects the v=DMARC1 record from the per-RR TXT strings at
@@ -30,7 +31,7 @@ func analyzeDMARC(records []string) dmarcResult {
 		return dmarcResult{} // not present
 	}
 
-	res := dmarcResult{present: true}
+	res := dmarcResult{present: true, raw: rec}
 	tags := parseDMARCTags(rec)
 	if p := tags["p"]; p == "none" || p == "quarantine" || p == "reject" {
 		// RFC 7489 §6.3: a valid record requires the p= policy tag.

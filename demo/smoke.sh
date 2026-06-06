@@ -224,6 +224,10 @@ grep -E '^dnshealth_spf_record_count\{[^}]+\} 2$' "${METRICS_FILE}" | grep -F 'z
     || fail "spf-multiple.demo.: dnshealth_spf_record_count not 2"
 grep -E '^dnshealth_spf_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="spf-multiple.demo."' >/dev/null \
     || fail "spf-multiple.demo.: dnshealth_spf_valid not 0 (multiple records)"
+# ...and the records table must STILL surface both records (joined), not hide
+# them behind a blank (review #1): dnshealth_spf_record carries every record.
+grep -E '^dnshealth_spf_record\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="spf-multiple.demo."' | grep -F 'v=spf1 -all | v=spf1 include:_spf.example.net ~all' >/dev/null \
+    || fail "spf-multiple.demo.: dnshealth_spf_record must surface BOTH records joined, not a blank"
 # Malformed DMARC (dmarc-malformed): v=DMARC1 with no p= tag → invalid.
 grep -E '^dnshealth_dmarc_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="dmarc-malformed.demo."' >/dev/null \
     || fail "dmarc-malformed.demo.: dnshealth_dmarc_valid not 0 (malformed, no p=)"

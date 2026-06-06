@@ -234,7 +234,7 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("MX records — per zone").
 		Description(`Per-MX details for the selected zone: target hostname, priority, resolution status, CNAME status, syntax validity, role (primary = lowest-priority MX; ties at minimum priority all read "primary"). Empty cells in resolves/is-CNAME columns indicate Null MX's "." sentinel target — those checks intentionally don't apply per RFC 7505. SMTP-level reachability is out of scope; use blackbox_exporter with an SMTP prober for that.`).
-		GridPos(gridPos(12, subY(25, yOffset), 12, 8)).
+		GridPos(gridPos(12, subY(mailRowY(0), yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).
@@ -326,8 +326,8 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 func spfRecordsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("SPF record — per zone").
-		Description(`The actual SPF record the selected zone publishes, with the terminal 'all' qualifier and the RFC 7208 §4.6.4 recursive DNS-lookup count (11 means "≥11"). Raw record comes from the dnshealth_spf_record info gauge. An empty row means the zone publishes no SPF record.`).
-		GridPos(gridPos(12, subY(33, yOffset), 12, 8)).
+		Description(`The actual SPF record the selected zone publishes, with the terminal 'all' qualifier and the RFC 7208 §4.6.4 recursive DNS-lookup count (11 means "≥11"). Raw record comes from the dnshealth_spf_record info gauge. A zone with more than one v=spf1 record (an RFC 7208 §3.2 PermError) shows every record joined by " | " in the SPF-record cell, with the qualifier and lookup columns blank (those are undefined for multiple records). An empty row means the zone publishes no SPF record at all.`).
+		GridPos(gridPos(12, subY(mailRowY(1), yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).
@@ -381,7 +381,7 @@ func dmarcRecordsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("DMARC record — per zone").
 		Description(`The actual DMARC record the selected zone publishes at _dmarc.<zone>, with the parsed enforcement policy. Raw record comes from the dnshealth_dmarc_record info gauge. An empty row means the zone publishes no DMARC record.`).
-		GridPos(gridPos(12, subY(41, yOffset), 12, 8)).
+		GridPos(gridPos(12, subY(mailRowY(2), yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).

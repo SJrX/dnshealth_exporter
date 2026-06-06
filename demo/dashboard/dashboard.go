@@ -61,7 +61,7 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 	// resist spoofing) lives in one place. Expanded by default.
 	b = b.WithRow(dashboard.NewRowBuilder("Mail — MX / SPF / DMARC").
 		Collapsed(false).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(24, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(mailHeaderY, yOffset), W: 24, H: 1}).
 		WithPanel(mxStatusTable(yOffset)).
 		WithPanel(mxRecordsTable(yOffset)).
 		WithPanel(spfStatusTable(yOffset)).
@@ -74,7 +74,7 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 	// h=8, ending at 49).
 	b = b.WithRow(dashboard.NewRowBuilder("Operator / debug views").
 		Collapsed(true).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(49, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(mailRowY(3), yOffset), W: 24, H: 1}).
 		WithPanel(probeCycleDurationTimeseries(yOffset)).
 		WithPanel(dnsQueryRateTimeseries(yOffset)).
 		WithPanel(soaSerialsTimeseries(yOffset)).

@@ -9,11 +9,12 @@ import "strings"
 // RFC 7208 §4.6.4 lookup-budget check (the only resolution-requiring
 // part) is deferred to issue #58.
 type spfResult struct {
-	present     bool   // at least one v=spf1 record at the apex
-	recordCount int    // number of v=spf1 records (>1 ⇒ RFC 7208 §3.2 PermError)
-	valid       bool   // exactly one record that parsed without malformation
-	qualifier   string // terminal `all` qualifier: fail/softfail/neutral/pass/none
-	raw         string // the single record string (set only when present ∧ recordCount==1)
+	present     bool     // at least one v=spf1 record at the apex
+	recordCount int      // number of v=spf1 records (>1 ⇒ RFC 7208 §3.2 PermError)
+	valid       bool     // exactly one record that parsed without malformation
+	qualifier   string   // terminal `all` qualifier: fail/softfail/neutral/pass/none
+	raw         string   // the single record string (set only when present ∧ recordCount==1)
+	records     []string // every v=spf1 record at the apex, in published order (1 normally; >1 is the PermError case the records table must still surface)
 }
 
 // analyzeSPF selects the v=spf1 record(s) from the per-RR TXT strings at
@@ -34,6 +35,7 @@ func analyzeSPF(records []string) spfResult {
 		return res // present=false; qualifier unset
 	}
 	res.present = true
+	res.records = spf // all records, so the records table can show every one
 	if len(spf) > 1 {
 		// Multiple v=spf1 records is a permanent error (RFC 7208 §3.2):
 		// a receiver cannot pick one. Mark invalid; the qualifier is

@@ -1634,7 +1634,7 @@
             }
           ],
           "title": "SPF record — per zone",
-          "description": "The actual SPF record the selected zone publishes, with the terminal 'all' qualifier and the RFC 7208 §4.6.4 recursive DNS-lookup count (11 means \"≥11\"). Raw record comes from the dnshealth_spf_record info gauge. An empty row means the zone publishes no SPF record.",
+          "description": "The actual SPF record the selected zone publishes, with the terminal 'all' qualifier and the RFC 7208 §4.6.4 recursive DNS-lookup count (11 means \"≥11\"). Raw record comes from the dnshealth_spf_record info gauge. A zone with more than one v=spf1 record (an RFC 7208 §3.2 PermError) shows every record joined by \" | \" in the SPF-record cell, with the qualifier and lookup columns blank (those are undefined for multiple records). An empty row means the zone publishes no SPF record at all.",
           "transparent": false,
           "datasource": {
             "type": "prometheus",

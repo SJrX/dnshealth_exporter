@@ -43,38 +43,10 @@ func promURL() string {
 	return "http://localhost:9090"
 }
 
-// demoZones is the set of zones the demo deployment probes (mirrors
-// demo/exporter/dnshealth.yml). Hardcoded rather than read from the
-// config so that adding a zone is a conscious, reviewed change to the
-// expectations below — a new zone that renders a garbage state should
-// trip the universal invariant, not be silently skipped.
-var demoZones = []string{
-	"healthy.demo.",
-	"soa-serial-mismatch.demo.",
-	"lame-nameserver.demo.",
-	"ns-mismatch.demo.",
-	"ns-names-mismatch.demo.",
-	"ns-ip-mismatch.demo.",
-	"v6-only.demo.",
-	"dup-glue.demo.",
-	"hidden-master.demo.",
-	"missing-glue.demo.",
-	"mx-healthy.demo.",
-	"mx-broken.demo.",
-	"mx-null.demo.",
-	"mx-null-conflict.demo.",
-	// Mail family — each isolates one MX/SPF/DMARC signal, named for it.
-	"email-healthy.demo.",
-	"email-nomail.demo.",
-	"email-no-auth.demo.",
-	"dmarc-absent.demo.",
-	"dmarc-monitoring.demo.",
-	"dmarc-malformed.demo.",
-	"spf-permissive.demo.",
-	"spf-multiple.demo.",
-	"spf-toomanylookups.demo.",
-	"spf-incomplete.demo.",
-}
+// demoZones (the list of probed zones) lives in the untagged
+// demozones_test.go so the default `go test` build can guard it against the
+// exporter config (TestDemoZonesMatchExporterConfig). It is referenced here
+// to drive the per-zone predicate evaluation below.
 
 // stateName maps the four-state numeric value to its label.
 var stateName = map[int]string{0: "FAIL", 1: "PASS", 2: "N/A", 3: "WARN"}

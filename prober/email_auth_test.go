@@ -109,7 +109,9 @@ func TestEmailAuth_PermissivePlusAll(t *testing.T) {
 }
 
 // TestEmailAuth_MultipleSPFRecords — two v=spf1 records (RFC 7208 §3.2
-// PermError). record_count=2, valid=0, and no terminal-qualifier gauge.
+// PermError). record_count=2, valid=0, and no terminal-qualifier gauge —
+// but the raw-record gauge IS emitted (both records joined) so the records
+// table surfaces them instead of a misleading blank.
 func TestEmailAuth_MultipleSPFRecords(t *testing.T) {
 	// Fixture Setup
 	env := NewDNSFixture(t).
@@ -136,6 +138,9 @@ func TestEmailAuth_MultipleSPFRecords(t *testing.T) {
 	AssertGauge(t, metrics, "dnshealth_spf_record_count", WithLabels("zone", "example.test"), WithValue(2))
 	AssertGauge(t, metrics, "dnshealth_spf_valid", WithLabels("zone", "example.test"), WithValue(0))
 	AssertGaugeMissing(t, metrics, "dnshealth_spf_terminal_all", WithLabels("zone", "example.test"))
+	// Both records surfaced (joined) — the records table must not hide them.
+	AssertGauge(t, metrics, "dnshealth_spf_record",
+		WithLabels("zone", "example.test", "record", "v=spf1 -all | v=spf1 include:_spf.example.net ~all"), WithValue(1))
 }
 
 // TestEmailAuth_MalformedDMARC — a v=DMARC1 record with no p= tag.

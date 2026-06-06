@@ -43,6 +43,27 @@ func ProbeEmailAuth(ctx context.Context, zone string, nameservers []Nameserver, 
 				"spf_valid":        boolToFloat(spf.valid),
 			},
 		})
+		// Raw-record info gauge: emitted for EVERY zone that publishes any
+		// SPF record, including the multiple-record PermError case, so the
+		// records table shows what the zone actually publishes instead of a
+		// misleading blank (an empty row then unambiguously means "no SPF
+		// record at all"). The records-table panel joins by zone and renders
+		// one row per zone, so the >1-record case is surfaced as the records
+		// joined into the single `record` label rather than as colliding
+		// series. Cardinality note: one series per zone per cycle, dropped on
+		// the per-cycle registry rebuild, so the exporter never accumulates
+		// stale series; in Prometheus the {record=...} label does churn a new
+		// series whenever a zone edits its SPF record — fine in practice
+		// (SPF records change rarely), but it is a content-valued label.
+		if spf.present {
+			results = append(results, ProbeResult{
+				Zone:    zone,
+				Check:   "email_auth",
+				Success: true,
+				Metrics: map[string]float64{"spf_record": 1},
+				Labels:  map[string]string{"record": strings.Join(spf.records, " | ")},
+			})
+		}
 		// Terminal-qualifier info gauge only when exactly one SPF record
 		// exists — with zero or multiple records the qualifier is
 		// undefined and the dashboard row reads N/A via absent().
@@ -53,16 +74,6 @@ func ProbeEmailAuth(ctx context.Context, zone string, nameservers []Nameserver, 
 				Success: true,
 				Metrics: map[string]float64{"spf_terminal_all": 1},
 				Labels:  map[string]string{"qualifier": spf.qualifier},
-			})
-			// Info gauge carrying the raw SPF record as a label, so the
-			// dashboard records table can show what the zone actually
-			// publishes (one series per zone, bounded + stable string).
-			results = append(results, ProbeResult{
-				Zone:    zone,
-				Check:   "email_auth",
-				Success: true,
-				Metrics: map[string]float64{"spf_record": 1},
-				Labels:  map[string]string{"record": spf.raw},
 			})
 		}
 		// SPF DNS-lookup budget (RFC 7208 §4.6.4, spec 010) — only for a
@@ -122,6 +133,8 @@ func ProbeEmailAuth(ctx context.Context, zone string, nameservers []Nameserver, 
 		// Info gauge carrying the raw DMARC record as a label (for the
 		// records table) — emitted whenever a v=DMARC1 record is present,
 		// including the malformed (no-p=) case so the operator can see it.
+		// Same cardinality note as spf_record above: one series per zone per
+		// cycle, churns a new Prometheus series only when the record changes.
 		if dmarc.present {
 			results = append(results, ProbeResult{
 				Zone:    zone,

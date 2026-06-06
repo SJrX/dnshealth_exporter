@@ -315,6 +315,23 @@ var nsStatusChecks = []statusCheck{
 // as audit D-4.)
 var soaNoData = `absent(dnshealth_soa_serial{zone="$zone"})`
 
+// orNoData appends the unreachable-zone sentinel to a row's own
+// not-applicable predicate, so the row reads N/A both for its own reason AND
+// when the zone produced no data this cycle (lame NS / missing glue). It is
+// the single spelling of the `<base> or soaNoData` pattern used by the MX
+// per-target rows and the SPF/DMARC presence rows.
+//
+// SAFE USE OF `or`: the bare `or` is a trap only when both operands are
+// always-present series (two `== bool` comparisons), because `or` returns the
+// left operand whenever it has any sample (see the mxNoRealTargets warning
+// below). It is sound here BECAUSE soaNoData is absent()-based: it yields a
+// sample ONLY when there is no SOA data and is empty otherwise. So on a
+// reachable zone `base or <empty>` == base, and on an unreachable zone `base`
+// is itself empty (its selectors match nothing) so the result is the N/A
+// sentinel. Do NOT swap soaNoData for a `== bool`-style no-data predicate —
+// that resurrects the D-4 trap and silently disables this guard.
+func orNoData(base string) string { return base + " or " + soaNoData }
+
 var soaStatusChecks = []statusCheck{
 	{
 		refId:        "A",
@@ -395,12 +412,13 @@ var mxNoRealTargets = `clamp_max((dnshealth_mx_count{zone="$zone"} == bool 0) + 
 // mxNotApplicable extends mxNoRealTargets with the unreachable-zone
 // sentinel: the per-target rows (B/C/D) are N/A both when there are no real
 // MX targets (no MX / Null MX) AND when the zone produced no data at all
-// this cycle (lame NS / missing glue — soaNoData). Without the second term
-// an unreachable zone's MX rows cascade to FAIL on empty series — exactly
-// the distracting cross-signal noise the demo avoids: a zone selected to
+// this cycle (lame NS / missing glue). Without the second term an
+// unreachable zone's MX rows cascade to FAIL on empty series — exactly the
+// distracting cross-signal noise the demo avoids: a zone selected to
 // demonstrate broken delegation should not also paint its (unknowable) MX
-// rows red. Rows A and E reuse soaNoData directly for the same reason.
-var mxNotApplicable = mxNoRealTargets + " or " + soaNoData
+// rows red. Rows A and E reuse soaNoData directly for the same reason. See
+// orNoData for why the bare `or` is sound here.
+var mxNotApplicable = orNoData(mxNoRealTargets)
 
 var mxStatusChecks = []statusCheck{
 	{
@@ -484,7 +502,7 @@ var mxStatusChecks = []statusCheck{
 // Y=22 (header) + Y=23 (panels). yOffset shifts the section up
 // cleanly when the markdown info-panel header is absent.
 func mxStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("MX — status", gridPos(0, subY(25, yOffset), 12, 8), mxStatusChecks)
+	return statusTable("MX — status", gridPos(0, subY(mailRowY(0), yOffset), 12, 8), mxStatusChecks)
 }
 
 // Email-auth status checks (spec 009 — SPF + DMARC). Four four-state
@@ -515,13 +533,22 @@ var spfStatusChecks = []statusCheck{
 		refId:        "A",
 		expr:         `1 - clamp_max((max by (zone) (dnshealth_spf_record_count{zone="$zone"}) > bool 1) + (max by (zone) (dnshealth_spf_present{zone="$zone"}) == bool 1) * (max by (zone) (dnshealth_spf_valid{zone="$zone"}) == bool 0), 1)`,
 		warnExpr: `max by (zone) (dnshealth_spf_present{zone="$zone"}) == bool 0`,
-		// N/A when SPF was never evaluated (no series) OR the zone produced
-		// no data at all this cycle (lame NS / missing glue). The prober
-		// still emits spf_present=0 for an unreachable zone, so absent(spf_
-		// present) alone misses it — soaNoData catches the unreachable case
-		// and keeps the row gray instead of a WARN unrelated to the zone's
-		// actual (delegation) breakage.
-		naExpr:       `absent(dnshealth_spf_present{zone="$zone"}) or ` + soaNoData,
+		// N/A when the zone produced no data this cycle. Two distinct
+		// no-data shapes exist and need BOTH terms:
+		//   - missing-glue: NS resolution fails outright, so email_auth never
+		//     runs and spf_present is genuinely ABSENT → absent(spf_present)
+		//     fires. (soaNoData also fires here; either suffices.)
+		//   - lame-nameserver: the NS answers TXT with NOERROR-empty (a
+		//     forwarder, not authoritative), so fetchTXTRecords reports
+		//     success-with-no-records and email_auth emits spf_present=0 —
+		//     PRESENT, so absent(spf_present) does NOT fire. soaNoData
+		//     (absent(soa_serial)) is what catches this case, since ProbeSOA
+		//     requires a real SOA RR and emits nothing for a lame server.
+		// Keeping the row gray for both avoids a WARN unrelated to the zone's
+		// actual (delegation) breakage. NOTE: this reconciles a prober-layer
+		// asymmetry (present=0 vs absent on failure) at the dashboard layer —
+		// see issue #67 for the deeper prober-side fix.
+		naExpr:       orNoData(`absent(dnshealth_spf_present{zone="$zone"})`),
 		legendFormat: "Zone publishes a single valid SPF record",
 		detail: "**Metric**: `dnshealth_spf_present` / `dnshealth_spf_record_count` / `dnshealth_spf_valid`  \n" +
 			"**WARN (absent)**: the zone publishes no SPF record. Even a domain that sends no mail should publish `v=spf1 -all` to stop spammers forging it as the sender — SPF protects the domain regardless of whether it receives mail (MX), so this applies to no-mail and Null-MX zones too. Verify intent.  \n" +
@@ -569,7 +596,7 @@ var dmarcStatusChecks = []statusCheck{
 		warnExpr: `max by (zone) (dnshealth_dmarc_present{zone="$zone"}) == bool 0`,
 		// N/A when DMARC was never evaluated OR the zone produced no data at
 		// all this cycle — same unreachable-zone guard as the SPF row above.
-		naExpr:       `absent(dnshealth_dmarc_present{zone="$zone"}) or ` + soaNoData,
+		naExpr:       orNoData(`absent(dnshealth_dmarc_present{zone="$zone"})`),
 		legendFormat: "Zone publishes a valid DMARC record",
 		detail: "**Metric**: `dnshealth_dmarc_present` / `dnshealth_dmarc_valid`  \n" +
 			"**WARN (absent)**: no DMARC record at `_dmarc.<zone>`. DMARC ties SPF/DKIM together with alignment and tells receivers what to do on failure; without it, look-alike spoofing SPF alone can't stop is unmitigated. A no-mail / Null-MX domain still benefits (publish `p=reject`). Verify intent.  \n" +
@@ -596,12 +623,12 @@ var dmarcStatusChecks = []statusCheck{
 // row in the combined Mail section, paired with spfRecordsTable. Three
 // rows: single-valid-record, terminal-`all` qualifier, 10-lookup budget.
 func spfStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("SPF — status", gridPos(0, subY(33, yOffset), 12, 8), spfStatusChecks)
+	return statusTable("SPF — status", gridPos(0, subY(mailRowY(1), yOffset), 12, 8), spfStatusChecks)
 }
 
 // dmarcStatusTable is the DMARC status panel — left half (w=12) of the
 // DMARC row, paired with dmarcRecordsTable. Two rows: valid-record and
 // enforcing-policy.
 func dmarcStatusTable(yOffset uint32) *table.PanelBuilder {
-	return statusTable("DMARC — status", gridPos(0, subY(41, yOffset), 12, 8), dmarcStatusChecks)
+	return statusTable("DMARC — status", gridPos(0, subY(mailRowY(2), yOffset), 12, 8), dmarcStatusChecks)
 }

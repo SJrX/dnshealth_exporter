@@ -117,7 +117,7 @@ func main() {
 	})
 	mux.HandleFunc("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "OK")
+		_, _ = fmt.Fprintln(w, "OK")
 	})
 	mux.HandleFunc("/-/reload", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -132,11 +132,11 @@ func main() {
 		}
 		applyReloadedConfig(newCfg, &currentConfig, delegationCache)
 		logger.Info("Configuration reloaded", "zones", len(newCfg.Zones))
-		fmt.Fprintln(w, "OK")
+		_, _ = fmt.Fprintln(w, "OK")
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `<html>
+		_, _ = fmt.Fprintf(w, `<html>
 <head><title>DNS Health Exporter</title></head>
 <body>
 <h1>DNS Health Exporter</h1>

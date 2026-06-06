@@ -81,13 +81,14 @@ func statusMappings() []any {
 //     Responded/Recursion cells are null (e.g. ns-mismatch.demo.).
 //   - per-MX records: a Null MX "." sentinel emits no resolves/is-cname
 //     metric, so those cells are null.
+//
 // "index": 2 keeps it after the 0/1 value entries; matching is by the
 // special "null" match, not index.
 func nullNAMapping() map[string]any {
 	return map[string]any{
 		"type": "special",
 		"options": map[string]any{
-			"match": "null",
+			"match":  "null",
 			"result": map[string]any{"text": "n/a", "color": "text", "index": 2},
 		},
 	}

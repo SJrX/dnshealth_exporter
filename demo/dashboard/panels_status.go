@@ -27,17 +27,17 @@ import (
 // Four-state status convention (constitution Principle IX): the Result
 // cell renders one of four values, color-mapped by statusMappings():
 //
-//	0 → FAIL  (red)
-//	1 → PASS  (green)
-//	2 → N/A   (gray)    — the check does not apply to this zone
-//	3 → WARN  (yellow)  — passes the hard check but a soft concern applies
+//		0 → FAIL  (red)
+//		1 → PASS  (green)
+//		2 → N/A   (gray)    — the check does not apply to this zone
+//		3 → WARN  (yellow)  — passes the hard check but a soft concern applies
 //
-//   - expr     — REQUIRED. The hard PASS/FAIL predicate (yields 0/1).
-//   - naExpr   — OPTIONAL. Yields 1 when the check is not applicable.
-//     When set and truthy it WINS over everything else (a check that
-//     doesn't apply is neither pass, fail, nor warn).
-//   - warnExpr — OPTIONAL. Yields 1 when a soft concern applies. Only
-//     consulted when the hard check passes and the row is applicable.
+//	  - expr     — REQUIRED. The hard PASS/FAIL predicate (yields 0/1).
+//	  - naExpr   — OPTIONAL. Yields 1 when the check is not applicable.
+//	    When set and truthy it WINS over everything else (a check that
+//	    doesn't apply is neither pass, fail, nor warn).
+//	  - warnExpr — OPTIONAL. Yields 1 when a soft concern applies. Only
+//	    consulted when the hard check passes and the row is applicable.
 //
 // Rows that set ONLY expr (no naExpr/warnExpr) compile to byte-identical
 // output as before — composeStatusExpr returns expr verbatim in that
@@ -530,8 +530,8 @@ var spfStatusChecks = []statusCheck{
 	// only on a BROKEN record: more than one v=spf1 RR (RFC 7208 §3.2
 	// PermError) or a single record flagged invalid. hard = NOT broken.
 	{
-		refId:        "A",
-		expr:         `1 - clamp_max((max by (zone) (dnshealth_spf_record_count{zone="$zone"}) > bool 1) + (max by (zone) (dnshealth_spf_present{zone="$zone"}) == bool 1) * (max by (zone) (dnshealth_spf_valid{zone="$zone"}) == bool 0), 1)`,
+		refId:    "A",
+		expr:     `1 - clamp_max((max by (zone) (dnshealth_spf_record_count{zone="$zone"}) > bool 1) + (max by (zone) (dnshealth_spf_present{zone="$zone"}) == bool 1) * (max by (zone) (dnshealth_spf_valid{zone="$zone"}) == bool 0), 1)`,
 		warnExpr: `max by (zone) (dnshealth_spf_present{zone="$zone"}) == bool 0`,
 		// N/A when the zone produced no data this cycle. Two distinct
 		// no-data shapes exist and need BOTH terms:
@@ -591,8 +591,8 @@ var dmarcStatusChecks = []statusCheck{
 	// Row A: FAIL only on a present-but-malformed DMARC record; WARN on
 	// absence; PASS when present and valid.
 	{
-		refId:        "A",
-		expr:         `1 - clamp_max((max by (zone) (dnshealth_dmarc_present{zone="$zone"}) == bool 1) * (max by (zone) (dnshealth_dmarc_valid{zone="$zone"}) == bool 0), 1)`,
+		refId:    "A",
+		expr:     `1 - clamp_max((max by (zone) (dnshealth_dmarc_present{zone="$zone"}) == bool 1) * (max by (zone) (dnshealth_dmarc_valid{zone="$zone"}) == bool 0), 1)`,
 		warnExpr: `max by (zone) (dnshealth_dmarc_present{zone="$zone"}) == bool 0`,
 		// N/A when DMARC was never evaluated OR the zone produced no data at
 		// all this cycle — same unreachable-zone guard as the SPF row above.

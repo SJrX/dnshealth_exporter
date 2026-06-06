@@ -7,11 +7,22 @@ import (
 	"time"
 )
 
+// writeConfig writes content to a config.yml in a fresh temp dir and
+// returns its path, failing the test if the write itself errors. The
+// write is fixture setup, not behaviour under test, so a failure here
+// is a t.Fatal (the test cannot proceed), never a swallowed error.
+func writeConfig(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("writing fixture config: %v", err)
+	}
+	return path
+}
+
 func TestLoad_ValidConfig(t *testing.T) {
 	// Fixture Setup
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte("zones:\n  - example.com\n  - example.org\n"), 0644)
+	path := writeConfig(t, "zones:\n  - example.com\n  - example.org\n")
 
 	// Exercise SUT
 	cfg, err := Load(path)
@@ -30,9 +41,7 @@ func TestLoad_ValidConfig(t *testing.T) {
 
 func TestLoad_EmptyZones(t *testing.T) {
 	// Fixture Setup
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte("zones: []\n"), 0644)
+	path := writeConfig(t, "zones: []\n")
 
 	// Exercise SUT
 	_, err := Load(path)
@@ -55,9 +64,7 @@ func TestLoad_MissingFile(t *testing.T) {
 
 func TestLoad_InvalidYAML(t *testing.T) {
 	// Fixture Setup
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte("{{{{not yaml"), 0644)
+	path := writeConfig(t, "{{{{not yaml")
 
 	// Exercise SUT
 	_, err := Load(path)
@@ -70,9 +77,7 @@ func TestLoad_InvalidYAML(t *testing.T) {
 
 func TestLoad_DefaultTimingValues(t *testing.T) {
 	// Fixture Setup — no timing fields specified
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte("zones:\n  - example.com\n"), 0644)
+	path := writeConfig(t, "zones:\n  - example.com\n")
 
 	// Exercise SUT
 	cfg, err := Load(path)
@@ -97,15 +102,13 @@ func TestLoad_DefaultTimingValues(t *testing.T) {
 
 func TestLoad_CustomTimingValues(t *testing.T) {
 	// Fixture Setup
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte(`zones:
+	path := writeConfig(t, `zones:
   - example.com
 probe_interval: 120s
 delegation_cache_ttl: 1h
 query_timeout: 10s
 zone_deadline: 45s
-`), 0644)
+`)
 
 	// Exercise SUT
 	cfg, err := Load(path)
@@ -130,14 +133,12 @@ zone_deadline: 45s
 
 func TestLoad_RootServersOverride(t *testing.T) {
 	// Fixture Setup
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte(`zones:
+	path := writeConfig(t, `zones:
   - example.com
 root_servers:
   - coredns-root:53
   - 127.0.0.1:5353
-`), 0644)
+`)
 
 	// Exercise SUT
 	cfg, err := Load(path)
@@ -157,9 +158,7 @@ root_servers:
 func TestLoad_RootServersDefaultsEmpty(t *testing.T) {
 	// Fixture Setup — no root_servers field; field MUST be empty (not
 	// populated with defaults) so the prober keeps its own defaults.
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte("zones:\n  - example.com\n"), 0644)
+	path := writeConfig(t, "zones:\n  - example.com\n")
 
 	// Exercise SUT
 	cfg, err := Load(path)
@@ -175,9 +174,7 @@ func TestLoad_RootServersDefaultsEmpty(t *testing.T) {
 
 func TestLoad_InvalidDomainName(t *testing.T) {
 	// Fixture Setup
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte("zones:\n  - notadomain\n"), 0644)
+	path := writeConfig(t, "zones:\n  - notadomain\n")
 
 	// Exercise SUT
 	_, err := Load(path)
@@ -192,13 +189,11 @@ func TestLoad_AddressOverrides_IPv6KeyCanonicalisation(t *testing.T) {
 	// Fixture Setup — write an IPv6 override key in expanded form
 	// (with leading zeros, uppercase). The lookup will be made with
 	// the canonical short form. Per spec 006 FR-013.
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte(`zones:
+	path := writeConfig(t, `zones:
   - example.com
 address_overrides:
   "2001:0DB8:0000:0000:0000:0000:0000:0001": "auth.local:53"
-`), 0644)
+`)
 
 	// Exercise SUT — load, then resolve the same address in canonical form
 	cfg, err := Load(path)
@@ -217,13 +212,11 @@ address_overrides:
 
 func TestLoad_AddressOverrides_RejectsInvalidIPKey(t *testing.T) {
 	// Fixture Setup — non-IP key in the override map
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	os.WriteFile(path, []byte(`zones:
+	path := writeConfig(t, `zones:
   - example.com
 address_overrides:
   "not-an-ip": "auth.local:53"
-`), 0644)
+`)
 
 	// Exercise SUT
 	_, err := Load(path)

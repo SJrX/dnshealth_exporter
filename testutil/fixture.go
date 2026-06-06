@@ -115,7 +115,7 @@ func (f *DNSFixture) Start(t testing.TB) *DNSFixture {
 func (f *DNSFixture) Stop() {
 	for _, srv := range f.servers {
 		if srv.server != nil {
-			srv.server.ShutdownContext(context.Background())
+			_ = srv.server.ShutdownContext(context.Background())
 			srv.wg.Wait()
 		}
 	}
@@ -216,7 +216,7 @@ func startTestServer(t testing.TB, srv *testServer) {
 
 		// Garbage: send random bytes
 		if srv.options.Garbage {
-			w.Write([]byte{0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03})
+			_, _ = w.Write([]byte{0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03})
 			return
 		}
 
@@ -226,12 +226,12 @@ func startTestServer(t testing.TB, srv *testServer) {
 		// Override rcode if set
 		if srv.options.Rcode != 0 {
 			m.Rcode = srv.options.Rcode
-			w.WriteMsg(m)
+			_ = w.WriteMsg(m)
 			return
 		}
 
 		if len(r.Question) == 0 {
-			w.WriteMsg(m)
+			_ = w.WriteMsg(m)
 			return
 		}
 
@@ -314,7 +314,7 @@ func startTestServer(t testing.TB, srv *testServer) {
 			}
 		}
 
-		w.WriteMsg(m)
+		_ = w.WriteMsg(m)
 	})
 
 	server := &mdns.Server{
@@ -328,9 +328,10 @@ func startTestServer(t testing.TB, srv *testServer) {
 	srv.wg.Add(1)
 	go func() {
 		defer srv.wg.Done()
-		if err := server.ListenAndServe(); err != nil {
-			// Ignore errors from shutdown
-		}
+		// ListenAndServe returns a non-nil error on normal shutdown
+		// (Stop closes the socket out from under it); there is nothing
+		// useful to do with it in a test server, so discard it.
+		_ = server.ListenAndServe()
 	}()
 
 	// Wait for server to be ready (skip for Drop/Garbage servers —

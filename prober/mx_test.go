@@ -218,7 +218,7 @@ func TestMX_NullMXConflict(t *testing.T) {
 			SOA("example.test"),
 			NS("example.test", "ns1.example.test"),
 			A("ns1.example.test", "127.240.0.2"),
-			MX("example.test", 0, "."),                   // Null MX
+			MX("example.test", 0, "."),                       // Null MX
 			MX("example.test", 10, "real-mail.example.test"), // ALSO a real one
 			A("real-mail.example.test", "127.240.0.3"),
 		).

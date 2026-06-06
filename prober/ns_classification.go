@@ -217,4 +217,3 @@ func unionSorted(a, b map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
-

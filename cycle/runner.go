@@ -65,10 +65,10 @@ type Runner struct {
 	// semantics already give the reset-on-removal behavior the
 	// contract needs. See spec 008 R-3 and the cycle.Runner notes in
 	// the dnshealth_ns_stealth_reachable comment above for precedent.
-	MXCount             *prometheus.GaugeVec
-	MXResolvedCount     *prometheus.GaugeVec
-	MXCNAMECount        *prometheus.GaugeVec
-	MXSyntaxValidCount  *prometheus.GaugeVec
+	MXCount            *prometheus.GaugeVec
+	MXResolvedCount    *prometheus.GaugeVec
+	MXCNAMECount       *prometheus.GaugeVec
+	MXSyntaxValidCount *prometheus.GaugeVec
 
 	// NullMX = 1 iff the canonical RFC 7505 Null MX form is met
 	// (exactly one MX RR with preference 0 and target "."). Used by

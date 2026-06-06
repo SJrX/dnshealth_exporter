@@ -10,6 +10,27 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    # golangci-lint v2 is the single gate for both formatting (gofmt) and
+    # static analysis (issue #65). `golangci-lint run` reports gofmt drift
+    # as a finding, so this replaces the previously-absent gofmt gate. The
+    # linter set and build tags live in .golangci.yml.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          # Pinned for deterministic results — see issue #65 note on
+          # gofmt's doc-comment reformatting varying by toolchain.
+          version: v2.12.2
+
   test:
     runs-on: ubuntu-latest
     steps:

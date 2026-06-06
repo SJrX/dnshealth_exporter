@@ -57,7 +57,7 @@ func TestRunnerMetricsAreWiredToDashboard(t *testing.T) {
 	// stale-entry check below fails if one of these stops being a real
 	// runner metric, so the allowlist can't rot.
 	operatorOnlyMetrics := map[string]string{
-		"dnshealth_probe_zones_total": "operational counter (zones probed per cycle); surfaced via ad-hoc queries, not a per-zone dashboard row",
+		"dnshealth_probe_zones_total":  "operational counter (zones probed per cycle); surfaced via ad-hoc queries, not a per-zone dashboard row",
 		"dnshealth_dns_timeouts_total": "operational counter; the operator query-rate panel charts dnshealth_dns_queries_total, timeouts are a query-only drill-down",
 		// The operator panel charts dnshealth_query_duration_seconds (the
 		// prober-pipeline timing). The runner's own per-server

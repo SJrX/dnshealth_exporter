@@ -1,0 +1,33 @@
+# golangci-lint v2 configuration.
+#
+# This is the single source of truth for both formatting (gofmt) and
+# static analysis in CI — it replaces the previously-absent gofmt gate
+# (issue #65). `golangci-lint fmt` formats; `golangci-lint run` lints.
+#
+# Linters: the v2 "standard" default set (errcheck, govet, ineffassign,
+# staticcheck, unused) — a deliberately conservative baseline. More can
+# be layered on later without churn.
+version: "2"
+
+run:
+  # Lint the build-tagged files too — the integration and live-PromQL
+  # suites are real CI code (see ci.yml), so their files must be held to
+  # the same bar. Without this, golangci-lint silently skips them.
+  build-tags:
+    - integration
+    - promql_live
+
+linters:
+  default: standard
+
+formatters:
+  enable:
+    - gofmt
+
+issues:
+  # Show every finding. The defaults (max-same-issues: 3,
+  # max-issues-per-linter: 50) silently truncate the list, which hides
+  # repeated patterns (e.g. the same unchecked-error call across a test
+  # file) and makes "0 issues" feel closer than it is.
+  max-same-issues: 0
+  max-issues-per-linter: 0

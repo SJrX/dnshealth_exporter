@@ -107,9 +107,9 @@ func selfNSRecordsTable(yOffset uint32) *table.PanelBuilder {
 			},
 			ExcludeByName: map[string]bool{
 				"Time 1": true, "Time 2": true, "Time 3": true,
-				"source 1":   true,
-				"check":      true,
-				"zone 1":     true, "zone 2": true, "zone 3": true,
+				"source 1": true,
+				"check":    true,
+				"zone 1":   true, "zone 2": true, "zone 3": true,
 				"ip 2": true, "ip 3": true,
 				"instance 1": true, "instance 2": true, "instance 3": true,
 				"job 1": true, "job 2": true, "job 3": true,
@@ -259,20 +259,20 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 		})).
 		WithTransformation(Organize(OrganizeOptions{
 			RenameByName: map[string]string{
-				"target":     "Target",
-				"priority":   "Priority",
-				"Value #B":   "Resolves",
-				"Value #C":   "Is CNAME",
-				"Value #D":   "Syntax valid",
-				"Value #E":   "Role",
+				"target":   "Target",
+				"priority": "Priority",
+				"Value #B": "Resolves",
+				"Value #C": "Is CNAME",
+				"Value #D": "Syntax valid",
+				"Value #E": "Role",
 			},
 			IndexByName: map[string]int{
-				"target":     0,
-				"priority":   1,
-				"Value #B":   2,
-				"Value #C":   3,
-				"Value #D":   4,
-				"Value #E":   5,
+				"target":   0,
+				"priority": 1,
+				"Value #B": 2,
+				"Value #C": 3,
+				"Value #D": 4,
+				"Value #E": 5,
 			},
 			ExcludeByName: map[string]bool{
 				"Time 1": true, "Time 2": true, "Time 3": true, "Time 4": true, "Time 5": true,
@@ -356,8 +356,8 @@ func spfRecordsTable(yOffset uint32) *table.PanelBuilder {
 				"Value #C":  2,
 			},
 			ExcludeByName: map[string]bool{
-				"zone":      true, // redundant: the single selected zone
-				"Time 1":    true, "Time 2": true, "Time 3": true,
+				"zone":   true, // redundant: the single selected zone
+				"Time 1": true, "Time 2": true, "Time 3": true,
 				"nameserver 1": true, "nameserver 2": true, "nameserver 3": true,
 				"ip 1": true, "ip 2": true, "ip 3": true,
 				"__name__ 1": true, "__name__ 2": true, "__name__ 3": true,
@@ -405,8 +405,8 @@ func dmarcRecordsTable(yOffset uint32) *table.PanelBuilder {
 				"policy": 1,
 			},
 			ExcludeByName: map[string]bool{
-				"zone":      true,
-				"Time 1":    true, "Time 2": true,
+				"zone":   true,
+				"Time 1": true, "Time 2": true,
 				"nameserver 1": true, "nameserver 2": true,
 				"ip 1": true, "ip 2": true,
 				"__name__ 1": true, "__name__ 2": true,

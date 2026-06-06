@@ -1,0 +1,11 @@
+# Authoritative for spf-permissive.demo. — isolates the SPF +all signal:
+# the apex SPF ends in +all (authorizes any sender to spoof the domain),
+# so the SPF terminal-all row WARNs. DMARC (p=reject) and a Null MX are the
+# green baseline. (The former email-permissive's p=none signal now lives in
+# dmarc-monitoring.demo.)
+
+spf-permissive.demo. {
+    file /zones/spf-permissive.demo.zone
+    log
+    errors
+}

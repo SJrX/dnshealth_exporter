@@ -54,20 +54,30 @@ to appear.
 | `lame-nameserver.demo.` | "Authoritative" server is actually a misconfigured forwarder with no real authoritative chain | SOA check fails (`query_success{check="soa"}=0`) for this zone. (CoreDNS's `forward` plugin does not set RA on referral responses, so the recursion-available metric reads 0 — the dashboard's recursion panel is still useful for real-world deployments where the exporter is pointed at actual recursive resolvers.) |
 | `ns-mismatch.demo.` | Parent advertises 1 NS; the auth server reports 2 different NSs internally | "Parent and self report same NS records" = FAIL. The Parent records table shows the parent's view (1 NS); the per-NS SOA table populates from the self view (2 NSs). |
 | `v6-only.demo.` | Every NS has only an AAAA record (no A) | All per-NS metrics surface with IPv6 addresses in the `ip` label. Pre-spec-006 this zone produced no per-NS series at all. |
-| `email-healthy.demo.` | SPF `-all` + DMARC `p=reject` | "Email auth — status": all four rows PASS |
-| `email-spf-only.demo.` | SPF only, no DMARC | SPF rows PASS; DMARC-present row WARN (absent); DMARC-policy row N/A |
-| `email-none.demo.` | No SPF, no DMARC | Present rows WARN (verify intent); qualifier/policy rows N/A |
-| `email-permissive.demo.` | SPF `+all` + DMARC `p=none` | Present rows PASS; SPF-qualifier and DMARC-policy rows WARN (valid but weak) |
-| `email-broken.demo.` | Two `v=spf1` records + DMARC missing `p=` | SPF-valid and DMARC-valid rows FAIL (broken records); qualifier/policy rows N/A |
-| `email-nomail.demo.` | Null MX **and** SPF `-all` + DMARC `p=reject` | All email-auth rows PASS — proves the rows are MX-independent (anti-spoofing applies even to no-mail domains) |
-| `email-toomanylookups.demo.` | SPF chains `include:` past the RFC 7208 §4.6.4 ten-lookup limit | "SPF within the 10-lookup budget" row FAILs; `dnshealth_spf_lookup_count`=11 ("≥11") |
-| `email-spf-incomplete.demo.` | SPF `include:`s an unresolvable name | Budget row stays PASS while `dnshealth_spf_lookup_eval_complete`=0 — a flaky/unreachable include never triggers a false over-budget FAIL (spec 010 US2) |
+| `email-healthy.demo.` | Real MX + SPF `-all` + DMARC `p=reject` | The all-green reference: every MX/SPF/DMARC row PASSes |
+| `email-nomail.demo.` | Null MX **and** SPF `-all` + DMARC `p=reject` | All rows PASS — the locked-down no-mail domain; proves SPF/DMARC are MX-independent (anti-spoofing applies even to no-mail domains) |
+| `email-no-auth.demo.` | Null MX, no SPF, no DMARC | The unprotected domain: SPF and DMARC present rows WARN (verify intent); qualifier/policy rows N/A; MX green |
+| `dmarc-absent.demo.` | SPF `-all`, **no** DMARC | Only DMARC deviates: DMARC-present row WARN (absent); SPF and MX green |
+| `dmarc-monitoring.demo.` | DMARC `p=none` | Only DMARC deviates: DMARC-policy row WARN (monitoring, not enforcing); SPF and MX green |
+| `dmarc-malformed.demo.` | DMARC `v=DMARC1` missing `p=` | Only DMARC deviates: DMARC-valid row FAIL; SPF and MX green |
+| `spf-permissive.demo.` | SPF `+all` | Only SPF deviates: terminal-`all` qualifier row WARN; DMARC and MX green |
+| `spf-multiple.demo.` | Two `v=spf1` records | Only SPF deviates: SPF-valid row FAIL (PermError); qualifier/budget rows N/A; DMARC and MX green |
+| `spf-toomanylookups.demo.` | SPF chains `include:` past the RFC 7208 §4.6.4 ten-lookup limit | Only SPF deviates: budget row FAILs; `dnshealth_spf_lookup_count`=11 ("≥11"); DMARC and MX green |
+| `spf-incomplete.demo.` | SPF `include:`s an unresolvable name | Budget row stays PASS while `dnshealth_spf_lookup_eval_complete`=0 — a flaky/unreachable include never triggers a false over-budget FAIL (spec 010 US2); DMARC and MX green |
 
-The **"Email auth — SPF + DMARC"** section surfaces these as
-`dnshealth_spf_*` / `dnshealth_dmarc_*` gauges. Spec 010 adds the RFC 7208
-§4.6.4 SPF DNS-lookup-budget row (`dnshealth_spf_lookup_count` /
-`_budget_exceeded` / `_eval_complete`); the §4.6.4 void-lookup cap remains
-a future follow-up.
+Each mail zone **isolates one signal** and is named for the dimension it
+exercises (`mx-`/`spf-`/`dmarc-`/`email-`); every other dimension carries
+the uninteresting green baseline (a real-or-Null MX, `v=spf1 -all`, DMARC
+`p=reject`), so selecting a zone lights up only the panel it demonstrates.
+For the same reason every *non-mail* zone (NS/SOA/glue demos) also carries
+that baseline, and unreachable zones (`lame-nameserver`, `missing-glue`)
+read N/A across the Mail section rather than a cascade of unrelated FAILs.
+
+The collapsible **"Mail — MX / SPF / DMARC"** section surfaces these as
+`dnshealth_mx_*` / `dnshealth_spf_*` / `dnshealth_dmarc_*` gauges. Spec 010
+adds the RFC 7208 §4.6.4 SPF DNS-lookup-budget row
+(`dnshealth_spf_lookup_count` / `_budget_exceeded` / `_eval_complete`); the
+§4.6.4 void-lookup cap remains a future follow-up.
 
 `healthy.demo.` also doubles as the **dual-stack** demonstration —
 its NSes have both A and AAAA records, so every per-NS metric

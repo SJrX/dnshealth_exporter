@@ -1,0 +1,25 @@
+; spf-permissive.demo. — isolates ONE signal: a reckless SPF qualifier.
+; v=spf1 +all authorizes ANY sender to spoof the domain. The record is
+; syntactically valid (present row PASS) but the terminal-all row WARNs.
+; DMARC is healthy (p=reject) and a Null MX declares no inbound mail, so
+; the DMARC and MX panels are all green; only the SPF qualifier deviates.
+$ORIGIN spf-permissive.demo.
+$TTL 30
+
+@   IN  SOA  ns1.spf-permissive.demo. admin.spf-permissive.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.spf-permissive.demo.
+ns1     IN  A    172.31.0.33
+@       IN  A    172.31.0.33
+
+; Baseline: Null MX + enforcing DMARC. The signal is the +all qualifier.
+@       IN  MX   0 .
+; Reckless: +all authorizes the entire internet to send as this domain.
+@       IN  TXT  "v=spf1 +all"
+_dmarc  IN  TXT  "v=DMARC1; p=reject"

@@ -58,19 +58,22 @@ var demoZones = []string{
 	"v6-only.demo.",
 	"dup-glue.demo.",
 	"hidden-master.demo.",
+	"missing-glue.demo.",
 	"mx-healthy.demo.",
 	"mx-broken.demo.",
 	"mx-null.demo.",
 	"mx-null-conflict.demo.",
-	"missing-glue.demo.",
+	// Mail family — each isolates one MX/SPF/DMARC signal, named for it.
 	"email-healthy.demo.",
-	"email-spf-only.demo.",
-	"email-none.demo.",
-	"email-permissive.demo.",
-	"email-broken.demo.",
 	"email-nomail.demo.",
-	"email-toomanylookups.demo.",
-	"email-spf-incomplete.demo.",
+	"email-no-auth.demo.",
+	"dmarc-absent.demo.",
+	"dmarc-monitoring.demo.",
+	"dmarc-malformed.demo.",
+	"spf-permissive.demo.",
+	"spf-multiple.demo.",
+	"spf-toomanylookups.demo.",
+	"spf-incomplete.demo.",
 }
 
 // stateName maps the four-state numeric value to its label.
@@ -90,7 +93,8 @@ func panelChecks() []struct {
 		{"ns", nsStatusChecks},
 		{"soa", soaStatusChecks},
 		{"mx", mxStatusChecks},
-		{"email_auth", emailAuthStatusChecks},
+		{"spf", spfStatusChecks},
+		{"dmarc", dmarcStatusChecks},
 	}
 }
 
@@ -179,63 +183,122 @@ var expectations = map[string]string{
 	"ns/H/ns-mismatch.demo.":       "PASS",
 	"ns/H/ns-names-mismatch.demo.": "PASS",
 
-	// Email auth (spec 009). Panel rows: A = SPF valid, B = SPF
-	// qualifier, C = DMARC valid, D = DMARC policy.
-	// email-healthy — SPF -all + DMARC p=reject → all PASS.
-	"email_auth/A/email-healthy.demo.": "PASS",
-	"email_auth/B/email-healthy.demo.": "PASS",
-	"email_auth/C/email-healthy.demo.": "PASS",
-	"email_auth/D/email-healthy.demo.": "PASS",
-	// email-spf-only — SPF good, no DMARC → C WARN (absent), D N/A.
-	"email_auth/A/email-spf-only.demo.": "PASS",
-	"email_auth/B/email-spf-only.demo.": "PASS",
-	"email_auth/C/email-spf-only.demo.": "WARN",
-	"email_auth/D/email-spf-only.demo.": "N/A",
-	// email-none — neither record → present rows WARN, the qualifier /
-	// policy rows N/A.
-	"email_auth/A/email-none.demo.": "WARN",
-	"email_auth/B/email-none.demo.": "N/A",
-	"email_auth/C/email-none.demo.": "WARN",
-	"email_auth/D/email-none.demo.": "N/A",
-	// email-permissive — +all and p=none: present rows PASS, weak rows WARN.
-	"email_auth/A/email-permissive.demo.": "PASS",
-	"email_auth/B/email-permissive.demo.": "WARN",
-	"email_auth/C/email-permissive.demo.": "PASS",
-	"email_auth/D/email-permissive.demo.": "WARN",
-	// email-broken — two SPF records + malformed DMARC → valid rows FAIL,
-	// the qualifier / policy rows N/A (no single SPF / no valid policy).
-	"email_auth/A/email-broken.demo.": "FAIL",
-	"email_auth/B/email-broken.demo.": "N/A",
-	"email_auth/C/email-broken.demo.": "FAIL",
-	"email_auth/D/email-broken.demo.": "N/A",
-	// email-nomail — Null MX yet publishes -all + p=reject: all PASS,
-	// proving the rows are MX-independent (FR-017).
-	"email_auth/A/email-nomail.demo.": "PASS",
-	"email_auth/B/email-nomail.demo.": "PASS",
-	"email_auth/C/email-nomail.demo.": "PASS",
-	"email_auth/D/email-nomail.demo.": "PASS",
-	// A non-email zone (no SPF/DMARC) must render sanely, not break the
-	// universal invariant: present rows WARN, qualifier/policy rows N/A.
-	"email_auth/A/healthy.demo.": "WARN",
-	"email_auth/B/healthy.demo.": "N/A",
-	"email_auth/C/healthy.demo.": "WARN",
-	"email_auth/D/healthy.demo.": "N/A",
+	// ---- Mail no-data → N/A fix (this change) ----
+	// An unreachable zone (no SOA data this cycle — lame NS / missing glue)
+	// reads N/A across EVERY mail row, not a cascade of FAILs unrelated to
+	// the delegation breakage it actually demonstrates. This is the
+	// regression pin for the soaNoData naExpr added to the MX/SPF/DMARC
+	// rows; before it, MX rows FAILed and SPF/DMARC row A WARNed.
+	"mx/A/lame-nameserver.demo.":    "N/A",
+	"mx/B/lame-nameserver.demo.":    "N/A",
+	"mx/E/lame-nameserver.demo.":    "N/A",
+	"spf/A/lame-nameserver.demo.":   "N/A",
+	"spf/B/lame-nameserver.demo.":   "N/A",
+	"spf/C/lame-nameserver.demo.":   "N/A",
+	"dmarc/A/lame-nameserver.demo.": "N/A",
+	"dmarc/B/lame-nameserver.demo.": "N/A",
+	"mx/A/missing-glue.demo.":       "N/A",
+	"mx/E/missing-glue.demo.":       "N/A",
+	"spf/A/missing-glue.demo.":      "N/A",
+	"dmarc/A/missing-glue.demo.":    "N/A",
 
-	// SPF lookup-budget row (spec 010), refId E.
-	// email-toomanylookups — chained includes >10 → FAIL.
-	"email_auth/E/email-toomanylookups.demo.": "FAIL",
-	// Zones with a single valid SPF and few/no lookups → PASS.
-	"email_auth/E/email-healthy.demo.":     "PASS",
-	"email_auth/E/email-spf-only.demo.":    "PASS",
-	"email_auth/E/email-permissive.demo.":  "PASS",
-	"email_auth/E/email-nomail.demo.":      "PASS",
-	// email-spf-incomplete — unresolvable include: under budget, so PASS,
-	// even though eval_complete=0 (US2: no false FAIL on a flaky include).
-	"email_auth/E/email-spf-incomplete.demo.": "PASS",
-	// No single valid SPF record → N/A (gauge not emitted).
-	"email_auth/E/email-none.demo.":   "N/A",
-	"email_auth/E/email-broken.demo.": "N/A",
-	"email_auth/E/healthy.demo.":      "N/A",
+	// ---- Green mail baseline on reachable non-mail zones ----
+	// The flagship: selecting healthy.demo shows an all-green Mail section
+	// (Null MX + v=spf1 -all + DMARC p=reject), no cross-signal noise.
+	"mx/A/healthy.demo.":    "PASS",
+	"mx/E/healthy.demo.":    "PASS",
+	"spf/A/healthy.demo.":   "PASS",
+	"spf/B/healthy.demo.":   "PASS",
+	"spf/C/healthy.demo.":   "PASS",
+	"dmarc/A/healthy.demo.": "PASS",
+	"dmarc/B/healthy.demo.": "PASS",
+	// MX-family zones gain a green SPF/DMARC baseline (their signal is MX).
+	"spf/A/mx-healthy.demo.":         "PASS",
+	"dmarc/A/mx-healthy.demo.":       "PASS",
+	"spf/A/mx-broken.demo.":          "PASS",
+	"dmarc/A/mx-broken.demo.":        "PASS",
+	"spf/A/mx-null.demo.":            "PASS",
+	"dmarc/A/mx-null.demo.":          "PASS",
+	"spf/A/mx-null-conflict.demo.":   "PASS",
+	"dmarc/A/mx-null-conflict.demo.": "PASS",
+
+	// ---- Mail family (specs 009/010): each zone isolates ONE signal ----
+	// SPF rows: A = single-valid-record, B = terminal `all` qualifier,
+	// C = 10-lookup budget. DMARC rows: A = valid record, B = enforcing
+	// policy. Every cell NOT carrying the zone's signal is green.
+	//
+	// email-healthy — real MX + -all + p=reject → entire Mail section PASS.
+	"mx/A/email-healthy.demo.":    "PASS",
+	"mx/B/email-healthy.demo.":    "PASS",
+	"mx/E/email-healthy.demo.":    "PASS",
+	"spf/A/email-healthy.demo.":   "PASS",
+	"spf/B/email-healthy.demo.":   "PASS",
+	"spf/C/email-healthy.demo.":   "PASS",
+	"dmarc/A/email-healthy.demo.": "PASS",
+	"dmarc/B/email-healthy.demo.": "PASS",
+	// email-nomail — Null MX yet -all + p=reject: all PASS, proving the
+	// SPF/DMARC rows are MX-independent (FR-017).
+	"mx/A/email-nomail.demo.":    "PASS",
+	"mx/B/email-nomail.demo.":    "N/A",
+	"mx/E/email-nomail.demo.":    "PASS",
+	"spf/A/email-nomail.demo.":   "PASS",
+	"spf/B/email-nomail.demo.":   "PASS",
+	"spf/C/email-nomail.demo.":   "PASS",
+	"dmarc/A/email-nomail.demo.": "PASS",
+	"dmarc/B/email-nomail.demo.": "PASS",
+	// email-no-auth — Null MX green; SPF and DMARC both absent → present
+	// rows WARN, qualifier/policy rows N/A.
+	"mx/A/email-no-auth.demo.":    "PASS",
+	"spf/A/email-no-auth.demo.":   "WARN",
+	"spf/B/email-no-auth.demo.":   "N/A",
+	"spf/C/email-no-auth.demo.":   "N/A",
+	"dmarc/A/email-no-auth.demo.": "WARN",
+	"dmarc/B/email-no-auth.demo.": "N/A",
+	// dmarc-absent — SPF + MX green; only DMARC deviates (absent → WARN).
+	"mx/A/dmarc-absent.demo.":    "PASS",
+	"spf/A/dmarc-absent.demo.":   "PASS",
+	"spf/B/dmarc-absent.demo.":   "PASS",
+	"spf/C/dmarc-absent.demo.":   "PASS",
+	"dmarc/A/dmarc-absent.demo.": "WARN",
+	"dmarc/B/dmarc-absent.demo.": "N/A",
+	// dmarc-monitoring — SPF + MX green; DMARC valid but p=none → policy WARN.
+	"mx/A/dmarc-monitoring.demo.":    "PASS",
+	"spf/A/dmarc-monitoring.demo.":   "PASS",
+	"dmarc/A/dmarc-monitoring.demo.": "PASS",
+	"dmarc/B/dmarc-monitoring.demo.": "WARN",
+	// dmarc-malformed — SPF + MX green; DMARC present but no p= → valid FAIL.
+	"mx/A/dmarc-malformed.demo.":    "PASS",
+	"spf/A/dmarc-malformed.demo.":   "PASS",
+	"dmarc/A/dmarc-malformed.demo.": "FAIL",
+	"dmarc/B/dmarc-malformed.demo.": "N/A",
+	// spf-permissive — DMARC + MX green; SPF +all → qualifier WARN.
+	"mx/A/spf-permissive.demo.":    "PASS",
+	"spf/A/spf-permissive.demo.":   "PASS",
+	"spf/B/spf-permissive.demo.":   "WARN",
+	"spf/C/spf-permissive.demo.":   "PASS",
+	"dmarc/A/spf-permissive.demo.": "PASS",
+	"dmarc/B/spf-permissive.demo.": "PASS",
+	// spf-multiple — DMARC + MX green; two SPF records → valid FAIL, the
+	// qualifier and budget rows N/A (no single record to read).
+	"mx/A/spf-multiple.demo.":    "PASS",
+	"spf/A/spf-multiple.demo.":   "FAIL",
+	"spf/B/spf-multiple.demo.":   "N/A",
+	"spf/C/spf-multiple.demo.":   "N/A",
+	"dmarc/A/spf-multiple.demo.": "PASS",
+	"dmarc/B/spf-multiple.demo.": "PASS",
+	// spf-toomanylookups — DMARC + MX green; chained includes >10 → budget FAIL.
+	"mx/A/spf-toomanylookups.demo.":    "PASS",
+	"spf/A/spf-toomanylookups.demo.":   "PASS",
+	"spf/B/spf-toomanylookups.demo.":   "PASS",
+	"spf/C/spf-toomanylookups.demo.":   "FAIL",
+	"dmarc/A/spf-toomanylookups.demo.": "PASS",
+	// spf-incomplete — DMARC + MX green; unresolvable include → still PASS
+	// (no false FAIL on a flaky include; eval_complete=0).
+	"mx/A/spf-incomplete.demo.":    "PASS",
+	"spf/A/spf-incomplete.demo.":   "PASS",
+	"spf/B/spf-incomplete.demo.":   "PASS",
+	"spf/C/spf-incomplete.demo.":   "PASS",
+	"dmarc/A/spf-incomplete.demo.": "PASS",
 }
 
 // TestDashboardPromQLPredicates is the live PromQL evaluation gate.

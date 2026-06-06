@@ -5,6 +5,8 @@
 # walk at the in-stack fake root container instead of the public root.
 
 zones:
+  # Parent / NS / SOA / glue scenarios — the signal is in those panels;
+  # each now carries the green mail baseline so the Mail section is quiet.
   - healthy.demo.
   - soa-serial-mismatch.demo.
   - missing-glue.demo.
@@ -15,17 +17,23 @@ zones:
   - ns-names-mismatch.demo.
   - ns-ip-mismatch.demo.
   - hidden-master.demo.
+  # MX scenarios (spec 008).
   - mx-healthy.demo.
   - mx-broken.demo.
   - mx-null.demo.
+  - mx-null-conflict.demo.
+  # Mail-auth scenarios — each isolates one MX/SPF/DMARC signal and is
+  # named for it; everything else is the green baseline (specs 009/010).
   - email-healthy.demo.
-  - email-spf-only.demo.
-  - email-none.demo.
-  - email-permissive.demo.
-  - email-broken.demo.
   - email-nomail.demo.
-  - email-toomanylookups.demo.
-  - email-spf-incomplete.demo.
+  - email-no-auth.demo.
+  - dmarc-absent.demo.
+  - dmarc-monitoring.demo.
+  - dmarc-malformed.demo.
+  - spf-permissive.demo.
+  - spf-multiple.demo.
+  - spf-toomanylookups.demo.
+  - spf-incomplete.demo.
 
 # Tighter than the 60s production default so iteration sees changes
 # within ~20 seconds.

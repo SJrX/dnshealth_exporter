@@ -214,16 +214,19 @@ grep -E '^dnshealth_spf_terminal_all\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'z
     || fail "email-healthy.demo.: SPF terminal qualifier not 'fail' (-all)"
 grep -E '^dnshealth_dmarc_policy\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' | grep -F 'policy="reject"' >/dev/null \
     || fail "email-healthy.demo.: DMARC policy not 'reject'"
-# Absent: email-none publishes neither — spf_present must be a present 0.
-grep -E '^dnshealth_spf_present\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-none.demo."' >/dev/null \
-    || fail "email-none.demo.: dnshealth_spf_present not zero-emitted as 0"
-# Broken: email-broken has two v=spf1 records (count=2, invalid) + malformed DMARC.
-grep -E '^dnshealth_spf_record_count\{[^}]+\} 2$' "${METRICS_FILE}" | grep -F 'zone="email-broken.demo."' >/dev/null \
-    || fail "email-broken.demo.: dnshealth_spf_record_count not 2"
-grep -E '^dnshealth_spf_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-broken.demo."' >/dev/null \
-    || fail "email-broken.demo.: dnshealth_spf_valid not 0 (multiple records)"
-grep -E '^dnshealth_dmarc_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-broken.demo."' >/dev/null \
-    || fail "email-broken.demo.: dnshealth_dmarc_valid not 0 (malformed, no p=)"
+# Absent: email-no-auth publishes neither SPF nor DMARC — spf_present must
+# be a present 0 (a Null MX keeps its MX panel green, isolating the signal).
+grep -E '^dnshealth_spf_present\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-no-auth.demo."' >/dev/null \
+    || fail "email-no-auth.demo.: dnshealth_spf_present not zero-emitted as 0"
+# Broken SPF (spf-multiple): two v=spf1 records → count=2, invalid. (DMARC and
+# MX are the green baseline; the malformed-DMARC signal lives in dmarc-malformed.)
+grep -E '^dnshealth_spf_record_count\{[^}]+\} 2$' "${METRICS_FILE}" | grep -F 'zone="spf-multiple.demo."' >/dev/null \
+    || fail "spf-multiple.demo.: dnshealth_spf_record_count not 2"
+grep -E '^dnshealth_spf_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="spf-multiple.demo."' >/dev/null \
+    || fail "spf-multiple.demo.: dnshealth_spf_valid not 0 (multiple records)"
+# Malformed DMARC (dmarc-malformed): v=DMARC1 with no p= tag → invalid.
+grep -E '^dnshealth_dmarc_valid\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="dmarc-malformed.demo."' >/dev/null \
+    || fail "dmarc-malformed.demo.: dnshealth_dmarc_valid not 0 (malformed, no p=)"
 # MX-independence (FR-017): email-nomail has a Null MX yet PASSes email-auth.
 grep -E '^dnshealth_dmarc_policy\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-nomail.demo."' | grep -F 'policy="reject"' >/dev/null \
     || fail "email-nomail.demo.: Null-MX zone should still publish DMARC p=reject (FR-017)"
@@ -234,20 +237,20 @@ grep -E '^dnshealth_dmarc_record\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone=
     || fail "email-healthy.demo.: dnshealth_dmarc_record not carrying the raw DMARC record"
 
 echo "A3g: SPF DNS-lookup budget (RFC 7208 §4.6.4, spec 010)"
-# Over budget: email-toomanylookups chains include: past 10 → exceeded=1, count=11.
-grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="email-toomanylookups.demo."' >/dev/null \
-    || fail "email-toomanylookups.demo.: dnshealth_spf_lookup_budget_exceeded not 1 (should be over budget)"
-grep -E '^dnshealth_spf_lookup_count\{[^}]+\} 11$' "${METRICS_FILE}" | grep -F 'zone="email-toomanylookups.demo."' >/dev/null \
-    || fail "email-toomanylookups.demo.: dnshealth_spf_lookup_count not 11 (≥11 stop semantics)"
+# Over budget: spf-toomanylookups chains include: past 10 → exceeded=1, count=11.
+grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 1$' "${METRICS_FILE}" | grep -F 'zone="spf-toomanylookups.demo."' >/dev/null \
+    || fail "spf-toomanylookups.demo.: dnshealth_spf_lookup_budget_exceeded not 1 (should be over budget)"
+grep -E '^dnshealth_spf_lookup_count\{[^}]+\} 11$' "${METRICS_FILE}" | grep -F 'zone="spf-toomanylookups.demo."' >/dev/null \
+    || fail "spf-toomanylookups.demo.: dnshealth_spf_lookup_count not 11 (≥11 stop semantics)"
 # In budget: email-healthy (v=spf1 -all, 0 lookups) → not exceeded.
 grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-healthy.demo."' >/dev/null \
     || fail "email-healthy.demo.: dnshealth_spf_lookup_budget_exceeded not 0 (should be in budget)"
-# Graceful degradation (US2): email-spf-incomplete has an unresolvable
-# include → eval_complete=0 but still NOT over budget (no false FAIL).
-grep -E '^dnshealth_spf_lookup_eval_complete\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-spf-incomplete.demo."' >/dev/null \
-    || fail "email-spf-incomplete.demo.: dnshealth_spf_lookup_eval_complete not 0 (unresolvable include)"
-grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="email-spf-incomplete.demo."' >/dev/null \
-    || fail "email-spf-incomplete.demo.: unreachable include must not raise a false over-budget FAIL (budget_exceeded should be 0)"
+# Graceful degradation (US2): spf-incomplete has an unresolvable include
+# → eval_complete=0 but still NOT over budget (no false FAIL).
+grep -E '^dnshealth_spf_lookup_eval_complete\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="spf-incomplete.demo."' >/dev/null \
+    || fail "spf-incomplete.demo.: dnshealth_spf_lookup_eval_complete not 0 (unresolvable include)"
+grep -E '^dnshealth_spf_lookup_budget_exceeded\{[^}]+\} 0$' "${METRICS_FILE}" | grep -F 'zone="spf-incomplete.demo."' >/dev/null \
+    || fail "spf-incomplete.demo.: unreachable include must not raise a false over-budget FAIL (budget_exceeded should be 0)"
 
 echo "A4: probe cycle ran and produced query counts"
 grep -E '^dnshealth_probe_cycle_duration_seconds [0-9]' "${METRICS_FILE}" >/dev/null \

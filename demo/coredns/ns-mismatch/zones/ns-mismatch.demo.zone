@@ -34,3 +34,10 @@ ns-internal-b    IN  A   172.31.0.15
 
 @                IN  A   172.31.0.15
 www              IN  A   172.31.0.15
+
+; --- mail baseline (uninteresting): Null MX (RFC 7505) declares no inbound
+; mail and SPF -all + DMARC p=reject lock down spoofing, so the Mail section
+; stays green; this zone's signal is in the Parent/NS/SOA panels. ---
+@     IN  MX   0 .
+@     IN  TXT  "v=spf1 -all"
+_dmarc IN  TXT  "v=DMARC1; p=reject"

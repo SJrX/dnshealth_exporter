@@ -1,0 +1,27 @@
+; spf-multiple.demo. — isolates ONE signal: more than one v=spf1 record,
+; an RFC 7208 §3.2 PermError (a receiver can't pick one). SPF row A FAILs;
+; the qualifier and budget rows read N/A (no single record to evaluate).
+; DMARC is healthy (p=reject) and a Null MX declares no inbound mail, so
+; the DMARC and MX panels are all green; only SPF deviates. (Split out of
+; the former email-broken, which bundled this with the malformed-DMARC
+; signal — see dmarc-malformed.demo.)
+$ORIGIN spf-multiple.demo.
+$TTL 30
+
+@   IN  SOA  ns1.spf-multiple.demo. admin.spf-multiple.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.spf-multiple.demo.
+ns1     IN  A    172.31.0.34
+@       IN  A    172.31.0.34
+
+; Baseline: Null MX + enforcing DMARC. The signal is the TWO SPF records.
+@       IN  MX   0 .
+@       IN  TXT  "v=spf1 -all"
+@       IN  TXT  "v=spf1 include:_spf.example.net ~all"
+_dmarc  IN  TXT  "v=DMARC1; p=reject"

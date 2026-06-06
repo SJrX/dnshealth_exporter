@@ -1,0 +1,27 @@
+; dmarc-malformed.demo. — isolates ONE signal: a present-but-malformed
+; DMARC record. v=DMARC1 is present but the mandatory p= tag is missing
+; (RFC 7489 §6.3), so receivers can't apply a policy — DMARC row A FAILs
+; and the policy row reads N/A. SPF is healthy (-all) and a Null MX
+; declares no inbound mail, so the SPF and MX panels are all green; only
+; DMARC deviates. (Split out of the former email-broken — see
+; spf-multiple.demo. for the multiple-SPF-records signal.)
+$ORIGIN dmarc-malformed.demo.
+$TTL 30
+
+@   IN  SOA  ns1.dmarc-malformed.demo. admin.dmarc-malformed.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.dmarc-malformed.demo.
+ns1     IN  A    172.31.0.39
+@       IN  A    172.31.0.39
+
+; Baseline: Null MX + healthy SPF. The signal is the malformed DMARC.
+@       IN  MX   0 .
+@       IN  TXT  "v=spf1 -all"
+; Malformed DMARC — v=DMARC1 present but no p= tag.
+_dmarc  IN  TXT  "v=DMARC1; rua=mailto:dmarc@example.com"

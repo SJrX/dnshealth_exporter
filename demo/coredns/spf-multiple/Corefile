@@ -1,0 +1,11 @@
+# Authoritative for spf-multiple.demo. — isolates the multiple-SPF-records
+# signal: TWO v=spf1 records (RFC 7208 §3.2 permanent error), so the
+# SPF-valid row FAILs and the qualifier/budget rows read N/A. DMARC
+# (p=reject) and a Null MX are the green baseline. (The former
+# email-broken's malformed-DMARC signal now lives in dmarc-malformed.demo.)
+
+spf-multiple.demo. {
+    file /zones/spf-multiple.demo.zone
+    log
+    errors
+}

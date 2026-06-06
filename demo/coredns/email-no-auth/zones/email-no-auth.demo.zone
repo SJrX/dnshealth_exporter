@@ -1,0 +1,25 @@
+; email-no-auth.demo. — the unprotected domain: neither SPF nor DMARC is
+; published. A Null MX (RFC 7505) keeps the MX panel green (the domain
+; declares it receives no mail), isolating the signal to email-auth: both
+; the SPF and DMARC present rows WARN (verify intent — even a non-sending
+; domain should publish v=spf1 -all + p=reject to resist spoofing), and
+; their qualifier/policy rows read N/A. This is the one zone that
+; deliberately shows the "nothing published at all" combined state.
+$ORIGIN email-no-auth.demo.
+$TTL 30
+
+@   IN  SOA  ns1.email-no-auth.demo. admin.email-no-auth.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.email-no-auth.demo.
+ns1   IN  A    172.31.0.32
+@     IN  A    172.31.0.32
+
+; Baseline: Null MX so the MX panel is green. Deliberately no SPF/DMARC
+; TXT records — both absent is the demonstrated signal.
+@     IN  MX   0 .

@@ -53,32 +53,28 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 		WithPanel(selfNSRecordsTable(yOffset)).
 		WithPanel(soaSerialsTable(yOffset))
 
-	// MX section (spec 008) — status panel + per-MX records table,
-	// side-by-side (w=12 each) inside a collapsible row, expanded by
-	// default. The row header sits at Y=22; both panels at Y=23. The
-	// collapsible wrapper lets operators hide the MX section if they're
-	// focused on parent/NS/SOA health and reclaim screen space.
-	b = b.WithRow(dashboard.NewRowBuilder("MX — email health").
+	// Mail section (specs 008/009/010) — one collapsible row holding a
+	// 2-per-row, 3-row grid of status + records panels: MX (Y=25), SPF
+	// (Y=33), DMARC (Y=41). Header at Y=24. Folds the former separate MX
+	// and Email-auth sections together so all mail-delivery health (the
+	// records that govern whether a domain can send/receive mail and
+	// resist spoofing) lives in one place. Expanded by default.
+	b = b.WithRow(dashboard.NewRowBuilder("Mail — MX / SPF / DMARC").
 		Collapsed(false).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(24, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(mailHeaderY, yOffset), W: 24, H: 1}).
 		WithPanel(mxStatusTable(yOffset)).
-		WithPanel(mxRecordsTable(yOffset)))
-
-	// Email-auth section (spec 009) — a standalone full-width status
-	// panel inside its own collapsible row, expanded by default. Row
-	// header at Y=35; the panel at Y=36, height 8. SPF + DMARC health,
-	// MX-independent (FR-017).
-	b = b.WithRow(dashboard.NewRowBuilder("Email auth — SPF + DMARC").
-		Collapsed(false).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(35, yOffset), W: 24, H: 1}).
-		WithPanel(emailAuthStatusTable(yOffset)))
+		WithPanel(mxRecordsTable(yOffset)).
+		WithPanel(spfStatusTable(yOffset)).
+		WithPanel(spfRecordsTable(yOffset)).
+		WithPanel(dmarcStatusTable(yOffset)).
+		WithPanel(dmarcRecordsTable(yOffset)))
 
 	// Operator row — collapsed by default; contains four timeseries.
-	// Shifted down to Y=45 to make room for the email-auth section
-	// (was Y=35 before spec 009).
+	// Y=49: below the 3-row Mail grid (header 24 + rows at 25/33/41, each
+	// h=8, ending at 49).
 	b = b.WithRow(dashboard.NewRowBuilder("Operator / debug views").
 		Collapsed(true).
-		GridPos(dashboard.GridPos{X: 0, Y: subY(45, yOffset), W: 24, H: 1}).
+		GridPos(dashboard.GridPos{X: 0, Y: subY(mailRowY(3), yOffset), W: 24, H: 1}).
 		WithPanel(probeCycleDurationTimeseries(yOffset)).
 		WithPanel(dnsQueryRateTimeseries(yOffset)).
 		WithPanel(soaSerialsTimeseries(yOffset)).

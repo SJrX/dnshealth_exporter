@@ -1,0 +1,25 @@
+; dmarc-absent.demo. — isolates ONE signal: DMARC is missing. SPF is
+; healthy (-all) and a Null MX declares no inbound mail, so the MX and SPF
+; panels are all green; only the DMARC panel deviates — the present row
+; WARNs (absent), the policy row is N/A. The common "added SPF, forgot
+; DMARC" partial-adoption state.
+$ORIGIN dmarc-absent.demo.
+$TTL 30
+
+@   IN  SOA  ns1.dmarc-absent.demo. admin.dmarc-absent.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@     IN  NS   ns1.dmarc-absent.demo.
+ns1   IN  A    172.31.0.31
+@     IN  A    172.31.0.31
+
+; Baseline: Null MX (RFC 7505) + healthy SPF. The signal is the ABSENCE
+; of a _dmarc record below.
+@     IN  MX   0 .
+@     IN  TXT  "v=spf1 -all"
+; No _dmarc record — DMARC is absent (the demonstrated signal).

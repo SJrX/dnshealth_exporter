@@ -234,7 +234,7 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 	return table.NewPanelBuilder().
 		Title("MX records — per zone").
 		Description(`Per-MX details for the selected zone: target hostname, priority, resolution status, CNAME status, syntax validity, role (primary = lowest-priority MX; ties at minimum priority all read "primary"). Empty cells in resolves/is-CNAME columns indicate Null MX's "." sentinel target — those checks intentionally don't apply per RFC 7505. SMTP-level reachability is out of scope; use blackbox_exporter with an SMTP prober for that.`).
-		GridPos(gridPos(12, subY(25, yOffset), 12, 10)).
+		GridPos(gridPos(12, subY(mailRowY(0), yOffset), 12, 8)).
 		Datasource(prometheusDS).
 		ShowHeader(true).
 		CellHeight(common.TableCellHeightSm).
@@ -316,4 +316,107 @@ func mxRecordsTable(yOffset uint32) *table.PanelBuilder {
 			{Id: "custom.width", Value: 110},
 		}).
 		SortBy(sortByAsc("Priority"))
+}
+
+// spfRecordsTable shows the raw SPF record the SELECTED zone publishes
+// plus the derived facts the SPF status rows evaluate: terminal `all`
+// qualifier and recursive DNS-lookup count (RFC 7208 §4.6.4; 11 = "≥11").
+// $zone-filtered, single row. The raw record is the `record` label on the
+// dnshealth_spf_record info gauge (one bounded series per zone).
+func spfRecordsTable(yOffset uint32) *table.PanelBuilder {
+	return table.NewPanelBuilder().
+		Title("SPF record — per zone").
+		Description(`The actual SPF record the selected zone publishes, with the terminal 'all' qualifier and the RFC 7208 §4.6.4 recursive DNS-lookup count (11 means "≥11"). Raw record comes from the dnshealth_spf_record info gauge. A zone with more than one v=spf1 record (an RFC 7208 §3.2 PermError) shows every record joined by " | " in the SPF-record cell, with the qualifier and lookup columns blank (those are undefined for multiple records). An empty row means the zone publishes no SPF record at all.`).
+		GridPos(gridPos(12, subY(mailRowY(1), yOffset), 12, 8)).
+		Datasource(prometheusDS).
+		ShowHeader(true).
+		CellHeight(common.TableCellHeightSm).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("A").
+			Expr(`dnshealth_spf_record{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("B").
+			Expr(`dnshealth_spf_terminal_all{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("C").
+			Expr(`dnshealth_spf_lookup_count{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTransformation(JoinByField(JoinByFieldOptions{
+			ByField: "zone",
+			Mode:    "outer",
+		})).
+		WithTransformation(Organize(OrganizeOptions{
+			RenameByName: map[string]string{
+				"record":    "SPF record",  // query A = dnshealth_spf_record
+				"qualifier": "SPF all",     // query B = dnshealth_spf_terminal_all
+				"Value #C":  "SPF lookups", // query C = lookup count
+			},
+			IndexByName: map[string]int{
+				"record":    0,
+				"qualifier": 1,
+				"Value #C":  2,
+			},
+			ExcludeByName: map[string]bool{
+				"zone":      true, // redundant: the single selected zone
+				"Time 1":    true, "Time 2": true, "Time 3": true,
+				"nameserver 1": true, "nameserver 2": true, "nameserver 3": true,
+				"ip 1": true, "ip 2": true, "ip 3": true,
+				"__name__ 1": true, "__name__ 2": true, "__name__ 3": true,
+				"instance 1": true, "instance 2": true, "instance 3": true,
+				"job 1": true, "job 2": true, "job 3": true,
+				"Value #A": true, "Value #B": true, // info-gauge 1s
+			},
+		})).
+		OverrideByName("SPF all", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 90},
+		}).
+		OverrideByName("SPF lookups", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 110},
+		}).
+		SortBy(sortByAsc("SPF record"))
+}
+
+// dmarcRecordsTable shows the raw DMARC record the SELECTED zone
+// publishes plus its enforcement policy. $zone-filtered, single row.
+func dmarcRecordsTable(yOffset uint32) *table.PanelBuilder {
+	return table.NewPanelBuilder().
+		Title("DMARC record — per zone").
+		Description(`The actual DMARC record the selected zone publishes at _dmarc.<zone>, with the parsed enforcement policy. Raw record comes from the dnshealth_dmarc_record info gauge. An empty row means the zone publishes no DMARC record.`).
+		GridPos(gridPos(12, subY(mailRowY(2), yOffset), 12, 8)).
+		Datasource(prometheusDS).
+		ShowHeader(true).
+		CellHeight(common.TableCellHeightSm).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("A").
+			Expr(`dnshealth_dmarc_record{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTarget(prometheus.NewDataqueryBuilder().RefId("B").
+			Expr(`dnshealth_dmarc_policy{zone="$zone"}`).
+			Format(prometheus.PromQueryFormatTable).Instant()).
+		WithTransformation(JoinByField(JoinByFieldOptions{
+			ByField: "zone",
+			Mode:    "outer",
+		})).
+		WithTransformation(Organize(OrganizeOptions{
+			RenameByName: map[string]string{
+				"record": "DMARC record", // query A = dnshealth_dmarc_record
+				"policy": "DMARC policy", // query B = dnshealth_dmarc_policy
+			},
+			IndexByName: map[string]int{
+				"record": 0,
+				"policy": 1,
+			},
+			ExcludeByName: map[string]bool{
+				"zone":      true,
+				"Time 1":    true, "Time 2": true,
+				"nameserver 1": true, "nameserver 2": true,
+				"ip 1": true, "ip 2": true,
+				"__name__ 1": true, "__name__ 2": true,
+				"instance 1": true, "instance 2": true,
+				"job 1": true, "job 2": true,
+				"Value #A": true, "Value #B": true, // info-gauge 1s
+			},
+		})).
+		OverrideByName("DMARC policy", []dashboard.DynamicConfigValue{
+			{Id: "custom.width", Value: 130},
+		}).
+		SortBy(sortByAsc("DMARC record"))
 }

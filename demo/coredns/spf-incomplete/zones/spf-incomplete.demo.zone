@@ -1,0 +1,30 @@
+; spf-incomplete.demo. — isolates ONE signal: the SPF lookup-budget "trust
+; under partial failure" case (spec 010 US2). The apex SPF include:s
+; _missing, deliberately NOT published here, so the recursive walk can't
+; resolve it: dnshealth_spf_lookup_eval_complete=0, the count is a lower
+; bound, budget_exceeded=0 → the SPF budget row reads PASS, not FAIL. An
+; unreachable include never cries wolf. DMARC is healthy and a Null MX
+; declares no inbound mail, so those panels are green.
+$ORIGIN spf-incomplete.demo.
+$TTL 30
+
+@   IN  SOA  ns1.spf-incomplete.demo. admin.spf-incomplete.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.spf-incomplete.demo.
+ns1     IN  A    172.31.0.37
+@       IN  A    172.31.0.37
+
+; Baseline: Null MX + enforcing DMARC. The signal is the unresolvable
+; include below.
+@       IN  MX   0 .
+_dmarc  IN  TXT  "v=DMARC1; p=reject"
+; include:_missing — _missing is intentionally absent below, so it does
+; not resolve to an SPF record → evaluation incomplete, but well under
+; the 10-lookup budget.
+@       IN  TXT  "v=spf1 include:_missing.spf-incomplete.demo. a -all"

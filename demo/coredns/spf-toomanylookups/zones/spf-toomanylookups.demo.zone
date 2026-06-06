@@ -1,0 +1,34 @@
+; spf-toomanylookups.demo. — isolates ONE signal: an SPF record that blows
+; the RFC 7208 §4.6.4 ten-lookup budget (spec 010). The apex record itself
+; looks fine, but recursively it needs 3 include lookups + (_a: a mx a mx =
+; 4) + (_b: a mx a mx = 4) + (_c: a mx = 2) = 13. The exporter stops the
+; instant it passes 10 and reports 11 ("≥11") → the SPF budget row FAILs.
+; SPF rows A/B PASS (single valid -all record); DMARC is healthy and a Null
+; MX declares no inbound mail, so those panels are green. The include
+; targets are in-zone, reached by the recursive resolver from the fake root.
+$ORIGIN spf-toomanylookups.demo.
+$TTL 30
+
+@   IN  SOA  ns1.spf-toomanylookups.demo. admin.spf-toomanylookups.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.spf-toomanylookups.demo.
+ns1     IN  A    172.31.0.36
+@       IN  A    172.31.0.36
+
+; Baseline: Null MX + enforcing DMARC. The signal is the over-budget SPF.
+@       IN  MX   0 .
+_dmarc  IN  TXT  "v=DMARC1; p=reject"
+
+; Apex SPF — three includes, terminal -all. Single, valid record.
+@       IN  TXT  "v=spf1 include:_a.spf-toomanylookups.demo. include:_b.spf-toomanylookups.demo. include:_c.spf-toomanylookups.demo. -all"
+
+; Included sub-records — a/mx mechanisms each cost one lookup.
+_a      IN  TXT  "v=spf1 a mx a mx -all"
+_b      IN  TXT  "v=spf1 a mx a mx -all"
+_c      IN  TXT  "v=spf1 a mx -all"

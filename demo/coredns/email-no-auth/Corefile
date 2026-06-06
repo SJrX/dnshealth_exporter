@@ -1,9 +1,9 @@
-# Authoritative for email-none.demo. — neither SPF nor DMARC (spec 009).
+# Authoritative for email-no-auth.demo. — neither SPF nor DMARC (spec 009).
 # The zone is reachable and answers, but publishes no email-auth records,
 # so the present rows WARN (absent) and the qualifier/policy rows N/A.
 
-email-none.demo. {
-    file /zones/email-none.demo.zone
+email-no-auth.demo. {
+    file /zones/email-no-auth.demo.zone
     log
     errors
 }

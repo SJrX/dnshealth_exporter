@@ -1,0 +1,27 @@
+; dmarc-monitoring.demo. — isolates ONE signal: DMARC is in monitoring
+; mode (p=none). The record is valid (present row PASS) but only monitors;
+; it does not enforce, so spoofed mail is still delivered — the policy row
+; WARNs. SPF is healthy (-all) and a Null MX declares no inbound mail, so
+; the SPF and MX panels are all green; only the DMARC policy deviates.
+; (Split out of the former email-permissive, which bundled this with the
+; SPF +all signal — see spf-permissive.demo.)
+$ORIGIN dmarc-monitoring.demo.
+$TTL 30
+
+@   IN  SOA  ns1.dmarc-monitoring.demo. admin.dmarc-monitoring.demo. (
+            2026060501  ; serial
+            30          ; refresh
+            30          ; retry
+            60          ; expire
+            30          ; minimum
+            )
+
+@       IN  NS   ns1.dmarc-monitoring.demo.
+ns1     IN  A    172.31.0.38
+@       IN  A    172.31.0.38
+
+; Baseline: Null MX + healthy SPF. The signal is the p=none policy.
+@       IN  MX   0 .
+@       IN  TXT  "v=spf1 -all"
+; Monitoring only — p=none does not enforce.
+_dmarc  IN  TXT  "v=DMARC1; p=none"

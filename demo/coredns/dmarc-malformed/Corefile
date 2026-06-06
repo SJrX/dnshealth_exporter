@@ -1,0 +1,10 @@
+# Authoritative for dmarc-malformed.demo. — isolates the malformed-DMARC
+# signal: a v=DMARC1 record missing the mandatory p= tag (RFC 7489 §6.3),
+# so the DMARC-valid row FAILs and the policy row reads N/A. SPF (-all) and
+# a Null MX are the green baseline. (Split out of the former email-broken.)
+
+dmarc-malformed.demo. {
+    file /zones/dmarc-malformed.demo.zone
+    log
+    errors
+}

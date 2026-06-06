@@ -27,6 +27,24 @@ func subY(base, off uint32) uint32 {
 	return base - off
 }
 
+// Mail section layout (the collapsible "Mail — MX / SPF / DMARC" row): a
+// header row followed by three 8-high panel rows (MX / SPF / DMARC), each
+// holding a status table on the left and a records table on the right.
+// Centralised here because the per-row Y must agree between dashboard.go
+// (the row header + the Operator row below) and the paired status/records
+// builders in panels_status.go / panels_records.go — previously six
+// scattered literals (24/25/33/41/49) that had to be hand-kept in lockstep.
+const (
+	mailHeaderY uint32 = 24 // Y of the collapsible Mail row header
+	mailRowH    uint32 = 8  // height of each MX/SPF/DMARC panel row
+)
+
+// mailRowY is the Y of the i-th panel row under the Mail header (i=0 MX,
+// 1 SPF, 2 DMARC). mailRowY(3) is the first free Y below the grid — where
+// the Operator row begins. Change mailRowH once and every row + the Operator
+// row move together.
+func mailRowY(i uint32) uint32 { return mailHeaderY + 1 + i*mailRowH }
+
 // statusMappings is the canonical four-state color mapping for every
 // "status" table Result cell (constitution Principle IX):
 //

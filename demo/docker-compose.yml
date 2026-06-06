@@ -282,56 +282,56 @@ services:
           - ns1.email-healthy.demo.
     restart: unless-stopped
 
-  coredns-email-spf-only:
+  coredns-dmarc-absent:
     image: coredns/coredns:latest
     command: ["-conf", "/etc/coredns/Corefile"]
     volumes:
-      - ./coredns/email-spf-only/Corefile:/etc/coredns/Corefile:ro
-      - ./coredns/email-spf-only/zones:/zones:ro
+      - ./coredns/dmarc-absent/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/dmarc-absent/zones:/zones:ro
     networks:
       demo:
         ipv4_address: 172.31.0.31
         aliases:
-          - ns1.email-spf-only.demo.
+          - ns1.dmarc-absent.demo.
     restart: unless-stopped
 
-  coredns-email-none:
+  coredns-email-no-auth:
     image: coredns/coredns:latest
     command: ["-conf", "/etc/coredns/Corefile"]
     volumes:
-      - ./coredns/email-none/Corefile:/etc/coredns/Corefile:ro
-      - ./coredns/email-none/zones:/zones:ro
+      - ./coredns/email-no-auth/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/email-no-auth/zones:/zones:ro
     networks:
       demo:
         ipv4_address: 172.31.0.32
         aliases:
-          - ns1.email-none.demo.
+          - ns1.email-no-auth.demo.
     restart: unless-stopped
 
-  coredns-email-permissive:
+  coredns-spf-permissive:
     image: coredns/coredns:latest
     command: ["-conf", "/etc/coredns/Corefile"]
     volumes:
-      - ./coredns/email-permissive/Corefile:/etc/coredns/Corefile:ro
-      - ./coredns/email-permissive/zones:/zones:ro
+      - ./coredns/spf-permissive/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/spf-permissive/zones:/zones:ro
     networks:
       demo:
         ipv4_address: 172.31.0.33
         aliases:
-          - ns1.email-permissive.demo.
+          - ns1.spf-permissive.demo.
     restart: unless-stopped
 
-  coredns-email-broken:
+  coredns-spf-multiple:
     image: coredns/coredns:latest
     command: ["-conf", "/etc/coredns/Corefile"]
     volumes:
-      - ./coredns/email-broken/Corefile:/etc/coredns/Corefile:ro
-      - ./coredns/email-broken/zones:/zones:ro
+      - ./coredns/spf-multiple/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/spf-multiple/zones:/zones:ro
     networks:
       demo:
         ipv4_address: 172.31.0.34
         aliases:
-          - ns1.email-broken.demo.
+          - ns1.spf-multiple.demo.
     restart: unless-stopped
 
   coredns-email-nomail:
@@ -348,30 +348,59 @@ services:
     restart: unless-stopped
 
   # SPF lookup-budget demos (spec 010 / #58).
-  coredns-email-toomanylookups:
+  coredns-spf-toomanylookups:
     image: coredns/coredns:latest
     command: ["-conf", "/etc/coredns/Corefile"]
     volumes:
-      - ./coredns/email-toomanylookups/Corefile:/etc/coredns/Corefile:ro
-      - ./coredns/email-toomanylookups/zones:/zones:ro
+      - ./coredns/spf-toomanylookups/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/spf-toomanylookups/zones:/zones:ro
     networks:
       demo:
         ipv4_address: 172.31.0.36
         aliases:
-          - ns1.email-toomanylookups.demo.
+          - ns1.spf-toomanylookups.demo.
     restart: unless-stopped
 
-  coredns-email-spf-incomplete:
+  coredns-spf-incomplete:
     image: coredns/coredns:latest
     command: ["-conf", "/etc/coredns/Corefile"]
     volumes:
-      - ./coredns/email-spf-incomplete/Corefile:/etc/coredns/Corefile:ro
-      - ./coredns/email-spf-incomplete/zones:/zones:ro
+      - ./coredns/spf-incomplete/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/spf-incomplete/zones:/zones:ro
     networks:
       demo:
         ipv4_address: 172.31.0.37
         aliases:
-          - ns1.email-spf-incomplete.demo.
+          - ns1.spf-incomplete.demo.
+    restart: unless-stopped
+
+  # dmarc-monitoring.demo. / dmarc-malformed.demo. — split out of the former
+  # email-permissive / email-broken so each isolates a single DMARC signal
+  # (p=none monitoring; missing p= tag).
+  coredns-dmarc-monitoring:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/dmarc-monitoring/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/dmarc-monitoring/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.38
+        aliases:
+          - ns1.dmarc-monitoring.demo.
+    restart: unless-stopped
+
+  coredns-dmarc-malformed:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns/dmarc-malformed/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/dmarc-malformed/zones:/zones:ro
+    networks:
+      demo:
+        ipv4_address: 172.31.0.39
+        aliases:
+          - ns1.dmarc-malformed.demo.
     restart: unless-stopped
 
   # Authoritative for mx-healthy.demo. — spec 008 MX-prober happy
@@ -437,13 +466,15 @@ services:
       - coredns-mx-null
       - coredns-mx-null-conflict
       - coredns-email-healthy
-      - coredns-email-spf-only
-      - coredns-email-none
-      - coredns-email-permissive
-      - coredns-email-broken
       - coredns-email-nomail
-      - coredns-email-toomanylookups
-      - coredns-email-spf-incomplete
+      - coredns-email-no-auth
+      - coredns-dmarc-absent
+      - coredns-dmarc-monitoring
+      - coredns-dmarc-malformed
+      - coredns-spf-permissive
+      - coredns-spf-multiple
+      - coredns-spf-toomanylookups
+      - coredns-spf-incomplete
     restart: unless-stopped
 
   prometheus:

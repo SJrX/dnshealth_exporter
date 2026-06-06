@@ -1,0 +1,10 @@
+# Authoritative for dmarc-monitoring.demo. — isolates the DMARC p=none
+# signal: a valid DMARC record that only MONITORS (does not enforce), so
+# the DMARC-policy row WARNs. SPF (-all) and a Null MX are the green
+# baseline. (Split out of the former email-permissive.)
+
+dmarc-monitoring.demo. {
+    file /zones/dmarc-monitoring.demo.zone
+    log
+    errors
+}

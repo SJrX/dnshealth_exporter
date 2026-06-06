@@ -1,12 +1,12 @@
-; email-healthy.demo. — the email-auth happy path (spec 009 US1+US2).
-; SPF ends in -all (hard fail unauthorized senders); DMARC enforces
-; p=reject. Every "Email auth — status" row reads PASS.
-
+; email-healthy.demo. — the all-green reference mail zone. Real MX (two
+; resolvable targets), SPF -all, DMARC p=reject: every Mail-section panel
+; (MX, SPF, DMARC) reads PASS. This is "what a healthy mail-receiving
+; domain looks like"; nothing outside the mail signal is interesting.
 $ORIGIN email-healthy.demo.
 $TTL 30
 
 @   IN  SOA  ns1.email-healthy.demo. admin.email-healthy.demo. (
-            2026060101  ; serial
+            2026060501  ; serial
             30          ; refresh
             30          ; retry
             60          ; expire
@@ -16,6 +16,12 @@ $TTL 30
 @       IN  NS   ns1.email-healthy.demo.
 ns1     IN  A    172.31.0.30
 @       IN  A    172.31.0.30
+
+; Two resolvable MX targets (primary + backup) — MX rows all PASS.
+@       IN  MX   10 mail-a.email-healthy.demo.
+@       IN  MX   20 mail-b.email-healthy.demo.
+mail-a  IN  A    172.31.0.30
+mail-b  IN  A    172.31.0.30
 
 ; SPF at the apex — single record, restrictive terminal qualifier.
 @       IN  TXT  "v=spf1 -all"

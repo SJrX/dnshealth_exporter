@@ -39,8 +39,11 @@ func dsVariable() *dashboard.DatasourceVariableBuilder {
 }
 
 // zoneVariable returns the $zone template variable, query-driven from
-// Prometheus, defaulting to healthy.demo.. Reproduces the v1 dashboard's
-// templating.list[0] entry.
+// Prometheus. defaultZone is the initially-selected value: a non-empty
+// zone (the demo variant) pins a known-good zone so the bundled stack
+// opens on something meaningful; an empty defaultZone (the public
+// variant) emits no `current`, so Grafana auto-selects the importing
+// user's first real zone on load instead of a demo name they don't have.
 //
 // The pinned SDK version has no .Definition() builder method, so the
 // emitted JSON omits the `definition` field present in v1. The
@@ -48,9 +51,9 @@ func dsVariable() *dashboard.DatasourceVariableBuilder {
 // `query.query` (set below via StringOrMap). Functional behaviour
 // preserved; gap documented in audit.md D3 (the drift test cannot
 // catch this since both committed and generated JSON omit it).
-func zoneVariable() *dashboard.QueryVariableBuilder {
+func zoneVariable(defaultZone string) *dashboard.QueryVariableBuilder {
 	const promQuery = "label_values(dnshealth_query_success, zone)"
-	return dashboard.NewQueryVariableBuilder("zone").
+	b := dashboard.NewQueryVariableBuilder("zone").
 		Label("Zone").
 		Datasource(prometheusDS).
 		Query(dashboard.StringOrMap{Map: map[string]any{
@@ -59,10 +62,13 @@ func zoneVariable() *dashboard.QueryVariableBuilder {
 			"refId":   "PrometheusVariableQueryEditor-VariableQuery",
 		}}).
 		Refresh(dashboard.VariableRefreshOnDashboardLoad).
-		Sort(dashboard.VariableSortAlphabeticalAsc).
-		Current(dashboard.VariableOption{
+		Sort(dashboard.VariableSortAlphabeticalAsc)
+	if defaultZone != "" {
+		b = b.Current(dashboard.VariableOption{
 			Selected: cog.ToPtr(true),
-			Text:     dashboard.StringOrArrayOfString{String: cog.ToPtr("healthy.demo.")},
-			Value:    dashboard.StringOrArrayOfString{String: cog.ToPtr("healthy.demo.")},
+			Text:     dashboard.StringOrArrayOfString{String: cog.ToPtr(defaultZone)},
+			Value:    dashboard.StringOrArrayOfString{String: cog.ToPtr(defaultZone)},
 		})
+	}
+	return b
 }

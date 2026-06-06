@@ -215,6 +215,28 @@ someone edited the JSON by hand (or edited the Go source without
 running `make dashboards`). The fix is the same either way: run
 `make dashboards` and commit.
 
+### Publishing to grafana.com
+
+The **default** variant (`dnshealth-overview.json`) is the one to publish
+to the [grafana.com dashboard catalog](https://grafana.com/grafana/dashboards/).
+It carries no demo zone names and lets Grafana auto-select the importing
+user's first zone, so it works in any deployment.
+
+Each uploaded revision must carry a Grafana `version` **strictly greater**
+than the currently-published one (it need not be exactly +1). The version
+is a hand-managed constant — publishing is rare, so there is no
+auto-increment machinery (issue #16) and the value must be a committed
+literal anyway, or the drift test could never stay green.
+
+To publish a new revision:
+
+1. Bump `dashboardVersion` in [`demo/dashboard/dashboard.go`](dashboard/dashboard.go)
+   (e.g. `1` → `2`).
+2. `make dashboards` from repo root, then commit the Go change + both
+   regenerated JSON files together.
+3. Upload `demo/grafana/dashboards/dnshealth-overview.json` via the
+   catalog's **Revisions** tab.
+
 ## Iterate on demo zones
 
 CoreDNS zone files live under `demo/coredns/<container>/zones/`.

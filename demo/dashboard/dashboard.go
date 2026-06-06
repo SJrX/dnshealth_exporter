@@ -12,6 +12,17 @@ import (
 // at the top. See FR-008 (b).
 const infoPanelHeight uint32 = 4
 
+// dashboardVersion is the top-level Grafana `version` for both emitted
+// variants. grafana.com's dashboard catalog requires each uploaded
+// revision to carry a version strictly greater than the last published
+// one (it need not be exactly +1), so this is bumped BY HAND when a new
+// revision is published to grafana.com — see demo/README.md "Publishing
+// to grafana.com". Publishing is rare and manual, so there is no
+// auto-increment machinery (issue #16): the value must be a committed
+// literal anyway, or the dashboard drift test (which byte-compares the
+// committed JSON against fresh generator output) could never stay green.
+const dashboardVersion uint32 = 1
+
 // buildOverview is the single shared builder used to emit BOTH dashboard
 // variants (default + demo). The only per-variant branches are:
 //
@@ -20,10 +31,15 @@ const infoPanelHeight uint32 = 4
 //     for the default variant to compact upward, 0 for the demo
 //     variant since the header occupies the top rows)
 //
+// defaultZone is the $zone the dashboard opens on. The demo variant pins
+// a known-good demo zone so the bundled stack lands on something
+// meaningful; the public variant passes "" so Grafana auto-selects the
+// importing user's first real zone instead of a demo name they don't have.
+//
 // Every panel function below is called exactly once. There are no
 // parallel panel chains for default vs demo — adding a panel touches
 // one place. See specs/005-dashboard-go-sdk/research.md R-5 and FR-008.
-func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard, error) {
+func buildOverview(uid, title string, includeInfoText bool, defaultZone string) (dashboard.Dashboard, error) {
 	var yOffset uint32
 	if !includeInfoText {
 		yOffset = infoPanelHeight
@@ -31,11 +47,12 @@ func buildOverview(uid, title string, includeInfoText bool) (dashboard.Dashboard
 
 	b := dashboard.NewDashboardBuilder(title).
 		Uid(uid).
+		Version(dashboardVersion).
 		Tags([]string{"dnshealth"}).
 		Refresh("10s").
 		Time("now-15m", "now").
 		WithVariable(dsVariable()).
-		WithVariable(zoneVariable())
+		WithVariable(zoneVariable(defaultZone))
 
 	if includeInfoText {
 		b = b.WithPanel(infoTextPanel())

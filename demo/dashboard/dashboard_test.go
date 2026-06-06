@@ -35,17 +35,18 @@ func TestDashboardJSONMatchesGenerator(t *testing.T) {
 		title           string
 		path            string
 		includeInfoText bool
+		defaultZone     string
 	}{
 		{"dnshealth-overview", "DNS Health Overview",
-			"demo/grafana/dashboards/dnshealth-overview.json", false},
+			"demo/grafana/dashboards/dnshealth-overview.json", false, ""},
 		{"dnshealth-overview-demo", "DNS Health Overview (demo)",
-			"demo/grafana/dashboards/dnshealth-overview-demo.json", true},
+			"demo/grafana/dashboards/dnshealth-overview-demo.json", true, "healthy.demo."},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.uid, func(t *testing.T) {
 			// Exercise SUT — build and marshal exactly like main.go.
-			d, err := buildOverview(tc.uid, tc.title, tc.includeInfoText)
+			d, err := buildOverview(tc.uid, tc.title, tc.includeInfoText, tc.defaultZone)
 			if err != nil {
 				t.Fatalf("buildOverview(%q): %v", tc.uid, err)
 			}

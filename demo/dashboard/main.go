@@ -20,28 +20,32 @@ type variant struct {
 	title           string
 	path            string
 	includeInfoText bool
+	defaultZone     string // initially-selected $zone; "" = let Grafana pick
 }
 
 var variants = []variant{
 	{
 		// Default variant — no demo-specific markdown header. This is
-		// what any real deployment should import. Demo Grafana also
-		// loads it; the demo-specific narration lives in the -demo
-		// variant below.
+		// what any real deployment should import (and what's published
+		// to grafana.com). defaultZone is empty so Grafana selects the
+		// importing user's first real zone, not a demo name.
 		uid:             "dnshealth-overview",
 		title:           "DNS Health Overview",
 		path:            "demo/grafana/dashboards/dnshealth-overview.json",
 		includeInfoText: false,
+		defaultZone:     "",
 	},
 	{
 		// Demo variant — adds a markdown header describing the demo
 		// zones (healthy.demo., soa-serial-mismatch.demo., etc.) and
 		// what each row of the dashboard means in the demo context.
-		// Only meaningful inside the bundled demo stack.
+		// Only meaningful inside the bundled demo stack, so it opens on
+		// the known-good demo zone.
 		uid:             "dnshealth-overview-demo",
 		title:           "DNS Health Overview (demo)",
 		path:            "demo/grafana/dashboards/dnshealth-overview-demo.json",
 		includeInfoText: true,
+		defaultZone:     "healthy.demo.",
 	},
 }
 
@@ -56,7 +60,7 @@ func main() {
 	}
 
 	for _, v := range variants {
-		d, err := buildOverview(v.uid, v.title, v.includeInfoText)
+		d, err := buildOverview(v.uid, v.title, v.includeInfoText, v.defaultZone)
 		if err != nil {
 			panic(fmt.Errorf("build %s: %w", v.uid, err))
 		}

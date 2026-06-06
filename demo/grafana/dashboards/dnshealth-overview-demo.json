@@ -99,7 +99,12 @@
         "cellHeight": "sm"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
         "overrides": [
           {
             "matcher": {
@@ -263,7 +268,12 @@
         "cellHeight": "sm"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
         "overrides": [
           {
             "matcher": {
@@ -392,7 +402,12 @@
         "cellHeight": "sm"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
         "overrides": [
           {
             "matcher": {
@@ -512,7 +527,12 @@
         "cellHeight": "sm"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
         "overrides": [
           {
             "matcher": {
@@ -660,7 +680,12 @@
         "cellHeight": "sm"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
         "overrides": [
           {
             "matcher": {
@@ -910,7 +935,12 @@
         "cellHeight": "sm"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          }
+        },
         "overrides": [
           {
             "matcher": {
@@ -1076,7 +1106,12 @@
             "cellHeight": "sm"
           },
           "fieldConfig": {
-            "defaults": {},
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "inspect": false
+              }
+            },
             "overrides": [
               {
                 "matcher": {
@@ -1273,7 +1308,12 @@
             "cellHeight": "sm"
           },
           "fieldConfig": {
-            "defaults": {},
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "inspect": false
+              }
+            },
             "overrides": [
               {
                 "matcher": {
@@ -1554,7 +1594,12 @@
             "cellHeight": "sm"
           },
           "fieldConfig": {
-            "defaults": {},
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "inspect": false
+              }
+            },
             "overrides": [
               {
                 "matcher": {
@@ -1711,7 +1756,12 @@
             "cellHeight": "sm"
           },
           "fieldConfig": {
-            "defaults": {},
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "inspect": false
+              }
+            },
             "overrides": [
               {
                 "matcher": {
@@ -1808,7 +1858,12 @@
             "cellHeight": "sm"
           },
           "fieldConfig": {
-            "defaults": {},
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "inspect": false
+              }
+            },
             "overrides": [
               {
                 "matcher": {
@@ -1950,7 +2005,12 @@
             "cellHeight": "sm"
           },
           "fieldConfig": {
-            "defaults": {},
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "inspect": false
+              }
+            },
             "overrides": [
               {
                 "matcher": {
@@ -2021,7 +2081,8 @@
               "unit": "s",
               "color": {
                 "mode": "palette-classic"
-              }
+              },
+              "custom": {}
             },
             "overrides": []
           }
@@ -2072,7 +2133,8 @@
             "defaults": {
               "color": {
                 "mode": "palette-classic"
-              }
+              },
+              "custom": {}
             },
             "overrides": [
               {
@@ -2186,7 +2248,8 @@
               "unit": "s",
               "color": {
                 "mode": "palette-classic"
-              }
+              },
+              "custom": {}
             },
             "overrides": []
           }

@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 
+	"github.com/grafana/grafana-foundation-sdk/go/cog"
+	"github.com/grafana/grafana-foundation-sdk/go/common"
 	"github.com/grafana/grafana-foundation-sdk/go/dashboard"
 )
 
@@ -51,6 +53,7 @@ func buildOverview(uid, title string, includeInfoText bool, defaultZone string) 
 		Tags([]string{"dnshealth"}).
 		Refresh("10s").
 		Time("now-15m", "now").
+		Annotations(builtinAnnotations()).
 		WithVariable(dsVariable()).
 		WithVariable(zoneVariable(defaultZone))
 
@@ -100,11 +103,61 @@ func buildOverview(uid, title string, includeInfoText bool, defaultZone string) 
 	return b.Build()
 }
 
+// builtinAnnotations returns the single default "Annotations & Alerts"
+// annotation that Grafana itself injects into every dashboard on save.
+// The SDK's model builder does NOT add it (it only emits `annotations`
+// when the list is non-empty), so a generated dashboard serialises
+// `annotations: {}` — which reads as the pre-`annotations.list` 2.x/3.0
+// shape and makes grafana.com's catalog reject the upload as "Old
+// Dashboard JSON Format". Emitting the builtin entry restores the modern
+// `annotations.list` form. Values mirror Grafana's own default.
+func builtinAnnotations() []cog.Builder[dashboard.AnnotationQuery] {
+	return []cog.Builder[dashboard.AnnotationQuery]{
+		dashboard.NewAnnotationQueryBuilder().
+			Name("Annotations & Alerts").
+			Datasource(common.DataSourceRef{
+				Type: cog.ToPtr("grafana"),
+				Uid:  cog.ToPtr("-- Grafana --"),
+			}).
+			Enable(true).
+			Hide(true).
+			IconColor("rgba(0, 211, 255, 1)").
+			Type("dashboard").
+			BuiltIn(1),
+	}
+}
+
+// dashboardRequires is the `__requires` manifest: the plugins + Grafana
+// version a consumer needs to render this dashboard. It is NOT part of
+// the dashboard model — Grafana adds it during "export for sharing
+// externally", and grafana.com's catalog keys on its presence. The
+// `version` for each panel plugin is intentionally "" (no minimum); the
+// Grafana floor is set deliberately low so the catalog doesn't gate
+// importers on a newer release than the dashboard actually needs.
+var dashboardRequires = []map[string]string{
+	{"type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.0.0"},
+	{"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"},
+	{"type": "panel", "id": "table", "name": "Table", "version": ""},
+	{"type": "panel", "id": "timeseries", "name": "Time series", "version": ""},
+}
+
 // marshalDashboard is the canonical serialisation path. main.go and the
 // drift test (T014) MUST go through this function so that any future
 // change to indent or trailing-newline handling stays in one place.
+//
+// It injects `__requires` (see dashboardRequires) as the leading
+// top-level key via struct embedding rather than a map round-trip:
+// dashboard.Dashboard has no custom MarshalJSON, so its fields promote
+// inline after `__requires`, preserving the model's field order exactly.
 func marshalDashboard(d dashboard.Dashboard) ([]byte, error) {
-	b, err := json.MarshalIndent(d, "", "  ")
+	catalog := struct {
+		Requires []map[string]string `json:"__requires"`
+		dashboard.Dashboard
+	}{
+		Requires:  dashboardRequires,
+		Dashboard: d,
+	}
+	b, err := json.MarshalIndent(catalog, "", "  ")
 	if err != nil {
 		return nil, err
 	}

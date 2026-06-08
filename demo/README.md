@@ -222,6 +222,15 @@ to the [grafana.com dashboard catalog](https://grafana.com/grafana/dashboards/).
 It carries no demo zone names and lets Grafana auto-select the importing
 user's first zone, so it works in any deployment.
 
+The generator emits this file **catalog-ready** — it includes the
+`__requires` manifest and the builtin `annotations.list` entry the catalog
+expects. Without them grafana.com rejects the upload as "Old Dashboard
+JSON Format" (the SDK builds the dashboard *model*; those fields are
+normally added by Grafana's "export for sharing externally", which
+Grafana 13+ no longer offers in the classic format — hence baking them
+into `marshalDashboard` instead). So you upload the committed file
+directly; no manual Grafana export step.
+
 Each uploaded revision must carry a Grafana `version` **strictly greater**
 than the currently-published one (it need not be exactly +1). The version
 is a hand-managed constant — publishing is rare, so there is no

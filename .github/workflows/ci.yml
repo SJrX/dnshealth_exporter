@@ -25,7 +25,7 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           # Pinned for deterministic results — see issue #65 note on
           # gofmt's doc-comment reformatting varying by toolchain.

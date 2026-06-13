@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
-	github.com/grafana/grafana-foundation-sdk/go v0.0.16 // used by ./demo/dashboard only — not linked into the exporter binary
+	github.com/grafana/grafana-foundation-sdk/go v0.0.17 // used by ./demo/dashboard only — not linked into the exporter binary
 	github.com/miekg/dns v1.1.72
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2

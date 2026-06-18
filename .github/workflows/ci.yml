@@ -17,7 +17,7 @@ jobs:
     # linter set and build tags live in .golangci.yml.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -34,7 +34,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -65,7 +65,7 @@ jobs:
     # still failing fast if a container hangs.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Go is needed for smoke.sh Step 6, the live dashboard-PromQL
       # predicate evaluation (issue #46) — it runs the promql_live test
